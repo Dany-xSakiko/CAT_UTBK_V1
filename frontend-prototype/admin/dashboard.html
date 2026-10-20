@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard Admin · CAT UTBK</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <h1>Dashboard</h1>
+        <p>Ringkasan aktivitas ujian dan integritas peserta.</p>
+      </div>
+
+      <!-- ================= statistik ================= -->
+      <div class="stat-grid mb-24">
+        <div class="stat">
+          <div class="stat-label">Total peserta</div>
+          <div class="stat-value" id="stPeserta">–</div>
+          <div class="stat-sub" id="stPesertaSub">akun terdaftar</div>
+          <div class="stat-ico" id="icPeserta"></div>
+        </div>
+        <div class="stat accent-green">
+          <div class="stat-label">Ujian aktif</div>
+          <div class="stat-value" id="stUjian">–</div>
+          <div class="stat-sub" id="stUjianSub">dari total ujian</div>
+          <div class="stat-ico" id="icUjian"></div>
+        </div>
+        <div class="stat accent-red">
+          <div class="stat-label">Total pelanggaran</div>
+          <div class="stat-value" id="stVio">–</div>
+          <div class="stat-sub" id="stVioSub">tercatat sistem</div>
+          <div class="stat-ico" id="icVio"></div>
+        </div>
+        <div class="stat accent-amber">
+          <div class="stat-label">Rata-rata skor</div>
+          <div class="stat-value" id="stSkor">–</div>
+          <div class="stat-sub" id="stSkorSub">dari ujian selesai</div>
+          <div class="stat-ico" id="icSkor"></div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px;align-items:start">
+        <!-- ================= pelanggaran terbaru ================= -->
+        <section class="card">
+          <div class="card-head">
+            <h3>Pelanggaran terbaru</h3>
+            <a class="btn btn-sm btn-ghost" href="laporan.html">Lihat semua</a>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>Peserta</th><th>Jenis</th><th>Ujian</th><th>Waktu</th></tr>
+              </thead>
+              <tbody id="recentBody">
+                <tr><td colspan="4"><div class="empty-state">Memuat…</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ================= distribusi jenis ================= -->
+        <section class="card">
+          <div class="card-head"><h3>Distribusi jenis pelanggaran</h3></div>
+          <div class="card-body" id="distBody">
+            <div class="muted small">Memuat…</div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================= ujian ================= -->
+      <section class="card mt-24">
+        <div class="card-head">
+          <h3>Daftar ujian</h3>
+          <a class="btn btn-sm" href="ujian.html" id="btnKelola">Kelola ujian</a>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>Judul</th><th>Tanggal</th><th>Durasi</th><th class="right">Soal</th><th class="right">Peserta</th><th>Status</th></tr>
+            </thead>
+            <tbody id="ujianBody">
+              <tr><td colspan="6"><div class="empty-state">Memuat…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/mock.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/layout.js"></script>
+<script src="../assets/js/pages/admin-dashboard.js"></script>
+</body>
+</html>

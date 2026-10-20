@@ -1,0 +1,28 @@
+/* ============================================================
+   Tambahan minimal — sisa style prototipe sudah ada di app.css
+   ============================================================ */
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: -2px;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* timeline proctoring */
+.timeline { display: flex; flex-direction: column; gap: 10px; }
+.timeline .tl-item {
+  border-left: 2px solid var(--line);
+  padding-left: 12px;
+}
+.timeline .tl-item .badge { margin-bottom: 3px; }
+
+/* ikon di dalam tombol icon */
+.btn svg { flex: none; }

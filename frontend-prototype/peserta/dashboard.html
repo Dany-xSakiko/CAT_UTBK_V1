@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard Peserta · CAT UTBK</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="p-shell">
+  <header class="p-topbar" id="ptopbar"></header>
+
+  <main class="p-content">
+    <!-- ================= sambutan ================= -->
+    <section class="welcome">
+      <div>
+        <h1 id="welcomeTitle">Selamat datang</h1>
+        <p id="welcomeSub">Pilih ujian yang tersedia di bawah ini.</p>
+        <span class="pill" id="todayPill"></span>
+      </div>
+      <div style="position:relative;z-index:1;text-align:right">
+        <div class="tiny" style="color:#a9c1d8">Status akun</div>
+        <div style="font-size:15px;font-weight:650" id="accountStatus">Aktif</div>
+      </div>
+    </section>
+
+    <!-- ================= ringkasan ================= -->
+    <div class="stat-grid mb-24">
+      <div class="stat">
+        <div class="stat-label">Ujian tersedia</div>
+        <div class="stat-value" id="stAktif">–</div>
+        <div class="stat-sub">sedang dibuka</div>
+        <div class="stat-ico" id="icAktif"></div>
+      </div>
+      <div class="stat accent-green">
+        <div class="stat-label">Ujian selesai</div>
+        <div class="stat-value" id="stSelesai">–</div>
+        <div class="stat-sub">sudah dikerjakan</div>
+        <div class="stat-ico" id="icSelesai"></div>
+      </div>
+      <div class="stat accent-amber">
+        <div class="stat-label">Rata-rata skor</div>
+        <div class="stat-value" id="stRata">–</div>
+        <div class="stat-sub">dari ujian selesai</div>
+        <div class="stat-ico" id="icRata"></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Catatan pelanggaran</div>
+        <div class="stat-value" id="stLanggar">–</div>
+        <div class="stat-sub" id="stLanggarSub">selama ujian</div>
+        <div class="stat-ico" id="icLanggar"></div>
+      </div>
+    </div>
+
+    <!-- ================= daftar ujian ================= -->
+    <div class="between mb-16">
+      <div>
+        <h2 style="font-size:18px">Ujian</h2>
+        <p class="small muted" style="margin:2px 0 0">Klik mulai untuk masuk ke ruang ujian. Kamera akan diaktifkan.</p>
+      </div>
+      <button class="btn btn-sm" id="btnRefresh"></button>
+    </div>
+
+    <div id="examList">
+      <div class="card card-pad muted small">Memuat daftar ujian…</div>
+    </div>
+
+    <!-- ================= riwayat ================= -->
+    <div class="between mt-24 mb-16">
+      <h2 style="font-size:18px">Riwayat pengerjaan</h2>
+      <span class="small muted" id="riwayatCount"></span>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Ujian</th>
+              <th>Tanggal</th>
+              <th>Mulai</th>
+              <th>Selesai</th>
+              <th class="right">Skor</th>
+              <th class="right">Pelanggaran</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="riwayatBody">
+            <tr><td colspan="8"><div class="empty-state">Memuat riwayat…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="alert alert-info mt-24">
+      <span class="alert-ico" id="icInfo"></span>
+      <div>
+        <b>Sebelum mulai</b>
+        Pastikan kamera menghadap wajahmu, pencahayaan cukup, dan tidak ada orang lain di sekitar.
+        Sistem memantau frame kamera setiap 3 detik selama ujian berlangsung.
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/mock.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/layout.js"></script>
+<script src="../assets/js/pages/peserta-dashboard.js"></script>
+</body>
+</html>

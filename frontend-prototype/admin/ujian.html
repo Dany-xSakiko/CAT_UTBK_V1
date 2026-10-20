@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Ujian · CAT UTBK</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+
+    <main class="content">
+      <div class="between mb-16">
+        <div class="page-head mb-0">
+          <h1>Data ujian</h1>
+          <p>Atur jadwal, durasi, dan status pembukaan ujian.</p>
+        </div>
+        <button class="btn btn-primary" id="btnAdd"></button>
+      </div>
+
+      <div class="filter-bar">
+        <div class="field grow">
+          <label for="fCari">Cari judul</label>
+          <input class="input" id="fCari" placeholder="Ketik judul mata kuliah…">
+        </div>
+        <div class="field">
+          <label for="fStatus">Status</label>
+          <select class="select" id="fStatus">
+            <option value="">Semua</option>
+            <option value="1">Aktif</option>
+            <option value="0">Nonaktif</option>
+          </select>
+        </div>
+        <button class="btn" id="btnReset">Reset</button>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:44px">#</th>
+                <th>Judul ujian</th>
+                <th>Tanggal</th>
+                <th>Waktu</th>
+                <th>Durasi</th>
+                <th class="right">Soal</th>
+                <th class="right">Peserta</th>
+                <th>Status</th>
+                <th class="right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="9"><div class="empty-state">Memuat data…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="small muted mt-8" id="footNote"></div>
+    </main>
+  </div>
+</div>
+
+<!-- ================= modal form ================= -->
+<div class="modal-backdrop" id="formModal">
+  <div class="modal wide">
+    <div class="modal-head">
+      <div>
+        <h3 id="mTitle">Tambah ujian</h3>
+        <div class="sub" id="mSub">Isi detail ujian di bawah ini.</div>
+      </div>
+      <button class="x" data-close aria-label="Tutup">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <form id="formUjian" novalidate>
+        <div class="field" id="fJudul">
+          <label for="judul">Judul / mata kuliah</label>
+          <input class="input" id="judul" placeholder="cth. Tes Potensi Skolastik — Penalaran Umum" required>
+          <div class="form-error">Judul wajib diisi.</div>
+        </div>
+
+        <div class="form-row">
+          <div class="field" id="fTanggal">
+            <label for="tanggal">Tanggal</label>
+            <input class="input" id="tanggal" type="date" required>
+            <div class="form-error">Tanggal wajib diisi.</div>
+          </div>
+          <div class="field" id="fDurasi">
+            <label for="durasi">Durasi (menit)</label>
+            <input class="input" id="durasi" type="number" min="1" max="300" value="30" required>
+            <div class="form-error">Durasi harus antara 1–300 menit.</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="mulai">Waktu mulai</label>
+            <input class="input" id="mulai" type="time" value="08:00">
+          </div>
+          <div class="field">
+            <label for="selesai">Waktu selesai</label>
+            <input class="input" id="selesai" type="time" value="09:00">
+          </div>
+        </div>
+
+        <label class="flex items-center gap-8" style="cursor:pointer;margin-bottom:4px">
+          <input type="checkbox" id="aktif">
+          <span class="small"><b>Buka ujian untuk peserta</b><br>
+            <span class="muted">Peserta hanya bisa mulai jika status aktif.</span></span>
+        </label>
+      </form>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn" data-close>Batal</button>
+      <button class="btn btn-primary" id="btnSave">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/mock.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/layout.js"></script>
+<script src="../assets/js/pages/admin-ujian.js"></script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bank Soal · CAT UTBK</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+
+    <main class="content">
+      <div class="between mb-16">
+        <div class="page-head mb-0">
+          <h1>Bank soal</h1>
+          <p>Kelola butir soal pilihan ganda untuk setiap ujian.</p>
+        </div>
+        <button class="btn btn-primary" id="btnAdd"></button>
+      </div>
+
+      <div class="filter-bar">
+        <div class="field grow">
+          <label for="fUjian">Ujian</label>
+          <select class="select" id="fUjian"></select>
+        </div>
+        <div class="field">
+          <label for="fCari">Cari teks soal</label>
+          <input class="input" id="fCari" placeholder="Kata kunci…">
+        </div>
+      </div>
+
+      <div id="infoBox" class="alert alert-info mb-16 hidden">
+        <span class="alert-ico" id="infoIco"></span>
+        <div id="infoText"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3 id="cardTitle">Daftar soal</h3>
+          <span class="small muted" id="cardMeta"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:56px">No</th>
+                <th>Soal</th>
+                <th>Opsi</th>
+                <th style="width:80px" class="center">Kunci</th>
+                <th class="right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="5"><div class="empty-state">Pilih ujian terlebih dahulu.</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ================= modal soal ================= -->
+<div class="modal-backdrop" id="soalModal">
+  <div class="modal wide">
+    <div class="modal-head">
+      <div>
+        <h3 id="mTitle">Tambah soal</h3>
+        <div class="sub" id="mSub">—</div>
+      </div>
+      <button class="x" data-close aria-label="Tutup">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <form id="formSoal" novalidate>
+        <div class="form-row">
+          <div class="field">
+            <label for="nomor">Nomor urut</label>
+            <input class="input" id="nomor" type="number" min="1" placeholder="otomatis">
+            <span class="hint">Kosongkan untuk otomatis di akhir.</span>
+          </div>
+          <div class="field">
+            <label for="kunci">Kunci jawaban</label>
+            <select class="select" id="kunci">
+              <option value="A">A</option><option value="B">B</option>
+              <option value="C">C</option><option value="D">D</option><option value="E">E</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" id="fTeks">
+          <label for="teks">Pertanyaan</label>
+          <textarea class="textarea" id="teks" rows="4" placeholder="Tulis pertanyaan di sini…" required></textarea>
+          <div class="form-error">Pertanyaan wajib diisi.</div>
+        </div>
+
+        <div class="field" id="fOpsi">
+          <label>Pilihan jawaban</label>
+          <div class="stack gap-8">
+            <div class="flex items-center gap-8"><b style="width:18px">A</b><input class="input" id="opsi_a" placeholder="Opsi A"></div>
+            <div class="flex items-center gap-8"><b style="width:18px">B</b><input class="input" id="opsi_b" placeholder="Opsi B"></div>
+            <div class="flex items-center gap-8"><b style="width:18px">C</b><input class="input" id="opsi_c" placeholder="Opsi C"></div>
+            <div class="flex items-center gap-8"><b style="width:18px">D</b><input class="input" id="opsi_d" placeholder="Opsi D"></div>
+            <div class="flex items-center gap-8"><b style="width:18px">E</b><input class="input" id="opsi_e" placeholder="Opsi E (opsional)"></div>
+          </div>
+          <div class="form-error">Minimal opsi A–D harus diisi.</div>
+        </div>
+      </form>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn" data-close>Batal</button>
+      <button class="btn btn-primary" id="btnSave">Simpan soal</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/mock.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/layout.js"></script>
+<script src="../assets/js/pages/admin-soal.js"></script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ruang Ujian · CAT UTBK</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="exam-shell">
+  <!-- ================= bar atas ================= -->
+  <header class="exam-bar">
+    <div class="exam-title">
+      <b id="barTitle">Memuat ujian…</b>
+      <span id="barSub">—</span>
+    </div>
+    <div class="spacer"></div>
+
+    <div class="flex items-center gap-8" id="camMini" style="font-size:12px;color:var(--ink-500)">
+      <span id="camDot" style="width:7px;height:7px;border-radius:50%;background:#98a2b3;display:inline-block"></span>
+      <span id="camText">Kamera belum aktif</span>
+    </div>
+
+    <div class="timer" id="timer">
+      <div>
+        <div class="t-label">Sisa waktu</div>
+        <div class="t-value" id="timerVal">--:--</div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btnFinish">Selesai ujian</button>
+  </header>
+
+  <!-- ================= layout ================= -->
+  <div class="exam-layout">
+    <!-- soal -->
+    <section class="q-card" id="qCard">
+      <div class="q-head">
+        <div class="q-no">Soal <span id="qNo">–</span></div>
+        <button class="btn btn-sm btn-ghost" id="btnFlag">Tandai ragu-ragu</button>
+      </div>
+
+      <div class="q-body">
+        <div class="q-text" id="qText">Memuat soal…</div>
+        <div class="opt-list" id="optList"></div>
+      </div>
+
+      <div class="q-foot">
+        <button class="btn" id="btnPrev">Sebelumnya</button>
+        <div class="spacer"></div>
+        <span class="small muted" id="autosaveNote">Jawaban tersimpan otomatis</span>
+        <button class="btn btn-primary" id="btnNext">Berikutnya</button>
+      </div>
+    </section>
+
+    <!-- navigator -->
+    <aside class="side-card">
+      <div class="head">
+        <span>Navigator soal</span>
+        <span class="small muted" id="navCount">0/0</span>
+      </div>
+      <div class="nav-grid" id="navGrid"></div>
+      <div class="side-stats">
+        <div class="box"><b id="sumDone">0</b><span>Terjawab</span></div>
+        <div class="box"><b id="sumLeft">0</b><span>Belum</span></div>
+      </div>
+      <div class="nav-legend">
+        <div class="li"><span class="sw on"></span> Sudah dijawab</div>
+        <div class="li"><span class="sw"></span> Belum dijawab</div>
+        <div class="li"><span class="sw flag"></span> Ditandai ragu</div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ================= panel kamera ================= -->
+  <div class="cam-panel" id="camPanel">
+    <div class="cam-head" id="camHead">
+      <span class="dot" id="camDot2"></span>
+      <span>Proctoring</span>
+      <span class="spacer"></span>
+      <button class="toggle" id="camToggle" title="Perkecil">−</button>
+    </div>
+    <div class="cam-view">
+      <video id="camVideo" autoplay muted playsinline></video>
+      <div class="off hidden" id="camOff">
+        Kamera tidak aktif.<br>Izinkan akses kamera di peramban.
+      </div>
+    </div>
+    <div class="status-line ok" id="camStatus">Menyiapkan kamera…</div>
+    <div class="cam-foot">
+      <span>Pelanggaran: <b id="vioCount">0</b></span>
+      <span id="camMode">—</span>
+    </div>
+  </div>
+
+  <!-- ================= overlay peringatan ================= -->
+  <div class="warn-overlay" id="warnOverlay">
+    <div class="warn-box">
+      <div class="ring" id="warnIcon"></div>
+      <h3 id="warnTitle">Peringatan</h3>
+      <p id="warnMsg">Wajah tidak terdeteksi. Pastikan kamu berada di depan kamera.</p>
+      <div class="counter" id="warnCounter">Peringatan 1 dari 12</div>
+      <button class="btn btn-primary btn-lg" id="warnOk">Saya mengerti</button>
+    </div>
+  </div>
+
+  <!-- ================= modal konfirmasi selesai ================= -->
+  <div class="modal-backdrop" id="finishModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>Selesaikan ujian?</h3>
+          <div class="sub">Setelah dikirim, jawaban tidak dapat diubah lagi.</div>
+        </div>
+        <button class="x" data-close aria-label="Tutup">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="summary-list">
+          <div class="summary-row"><span>Total soal</span><b id="fmTotal">0</b></div>
+          <div class="summary-row"><span>Sudah dijawab</span><b id="fmDone">0</b></div>
+          <div class="summary-row"><span>Belum dijawab</span><b id="fmLeft">0</b></div>
+          <div class="summary-row"><span>Ditandai ragu</span><b id="fmFlag">0</b></div>
+          <div class="summary-row"><span>Pelanggaran tercatat</span><b id="fmVio">0</b></div>
+        </div>
+        <div class="alert alert-warn mt-16" id="fmWarn">
+          <span class="alert-ico">⚠️</span>
+          <div>Masih ada soal yang belum dijawab. Soal kosong dinilai salah.</div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" data-close>Periksa lagi</button>
+        <button class="btn btn-primary" id="btnSubmit">Kirim jawaban</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/mock.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/layout.js"></script>
+<script src="../assets/js/proctoring.js"></script>
+<script src="../assets/js/pages/peserta-ujian.js"></script>
+</body>
+</html>

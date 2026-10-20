@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAT UTBK</title>
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<div class="auth" style="grid-template-columns:1fr">
+  <main class="auth-main">
+    <div class="auth-card center">
+      <div class="brand-mark" style="margin:0 auto 16px;width:52px;height:52px;border-radius:14px;font-size:17px">CAT</div>
+      <h2 style="margin-bottom:6px">CAT UTBK</h2>
+      <p class="lead">Mengarahkan ke halaman yang sesuai…</p>
+      <div class="stack gap-8" style="margin-top:18px">
+        <a class="btn btn-primary" href="login.html">Masuk ke sistem</a>
+        <a class="btn" href="peserta/dashboard.html">Portal peserta</a>
+        <a class="btn" href="admin/dashboard.html">Panel admin</a>
+      </div>
+      <p class="foot-note">Jika tidak dialihkan otomatis, pilih salah satu tautan di atas.</p>
+    </div>
+  </main>
+</div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/mock.js"></script>
+<script src="assets/js/api.js"></script>
+<script>
+  (function () {
+    const user = window.Api.me();
+    if (!user) { location.replace('login.html'); return; }
+    location.replace(user.role === 'Admin' ? 'admin/dashboard.html' : 'peserta/dashboard.html');
+  })();
+</script>
+</body>
+</html>

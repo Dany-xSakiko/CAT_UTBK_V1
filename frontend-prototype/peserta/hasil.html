@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hasil Ujian · CAT UTBK</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="p-shell">
+  <header class="p-topbar" id="ptopbar"></header>
+
+  <main class="p-content">
+    <div class="between mb-16">
+      <a class="btn btn-sm" href="dashboard.html" id="btnBack">Kembali ke dashboard</a>
+      <span class="small muted" id="headMeta"></span>
+    </div>
+
+    <!-- ================= hero skor ================= -->
+    <section class="result-hero">
+      <div class="score-ring" id="scoreRing"></div>
+      <div style="font-size:13px;color:var(--ink-500);text-transform:uppercase;letter-spacing:.07em;font-weight:600"
+           id="scoreCaption">Skor akhir</div>
+      <h2 id="resultTitle" style="margin-top:4px">—</h2>
+      <p class="muted small mb-0" id="resultSub">—</p>
+
+      <div class="result-grid">
+        <div class="box"><span>Total soal</span><b id="rTotal">–</b></div>
+        <div class="box"><span>Benar</span><b id="rBenar" style="color:var(--green-600)">–</b></div>
+        <div class="box"><span>Salah / kosong</span><b id="rSalah" style="color:var(--red-600)">–</b></div>
+        <div class="box"><span>Waktu pengerjaan</span><b id="rDurasi">–</b></div>
+      </div>
+    </section>
+
+    <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px;align-items:start" id="hasilGrid">
+      <!-- ================= rincian jawaban ================= -->
+      <section class="card">
+        <div class="card-head">
+          <h3>Rincian jawaban</h3>
+          <span class="small muted" id="rincianMeta"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:56px">No</th>
+                <th>Soal</th>
+                <th style="width:88px" class="center">Jawaban</th>
+                <th style="width:88px" class="center">Kunci</th>
+                <th style="width:90px">Hasil</th>
+              </tr>
+            </thead>
+            <tbody id="rincianBody">
+              <tr><td colspan="5"><div class="empty-state">Memuat rincian…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= pelanggaran ================= -->
+      <section class="stack gap-16">
+        <div class="card">
+          <div class="card-head">
+            <h3>Catatan proctoring</h3>
+            <span class="badge" id="vioBadge">0</span>
+          </div>
+          <div class="card-body">
+            <div id="vioTimeline" class="muted small">Tidak ada pelanggaran tercatat. 🎉</div>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <h4 style="margin-bottom:8px">Apa arti catatan ini?</h4>
+          <p class="small muted" style="margin:0">
+            Sistem menyimpan setiap anomali yang terdeteksi kamera sebagai bahan pemeriksaan panitia.
+            Catatan ini <b>tidak otomatis menggugurkan</b> hasil ujian, kecuali jumlahnya melewati batas
+            yang ditetapkan panitia.
+          </p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/mock.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/layout.js"></script>
+<script src="../assets/js/pages/peserta-hasil.js"></script>
+</body>
+</html>

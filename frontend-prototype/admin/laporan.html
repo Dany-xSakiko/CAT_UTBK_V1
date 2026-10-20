@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laporan Proctoring · CAT UTBK</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+
+    <main class="content">
+      <div class="between mb-16">
+        <div class="page-head mb-0">
+          <h1>Laporan proctoring</h1>
+          <p>Rekap pelanggaran peserta beserta bukti tangkapan kamera.</p>
+        </div>
+        <button class="btn" id="btnExport"></button>
+      </div>
+
+      <div class="filter-bar">
+        <div class="field grow">
+          <label for="fCari">Cari peserta</label>
+          <input class="input" id="fCari" placeholder="Nama atau username…">
+        </div>
+        <div class="field">
+          <label for="fJenis">Jenis pelanggaran</label>
+          <select class="select" id="fJenis">
+            <option value="">Semua jenis</option>
+            <option value="No Face">No Face</option>
+            <option value="Multiple Faces">Multiple Faces</option>
+            <option value="Looking Away">Looking Away</option>
+            <option value="Suspicious Activity">Suspicious Activity</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fUjian">Ujian</label>
+          <select class="select" id="fUjian"><option value="">Semua ujian</option></select>
+        </div>
+        <button class="btn" id="btnReset">Reset</button>
+      </div>
+
+      <div class="stat-grid mb-24" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+        <div class="stat accent-red">
+          <div class="stat-label">Total kejadian</div>
+          <div class="stat-value" id="stTotal" style="font-size:26px">–</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Peserta terlibat</div>
+          <div class="stat-value" id="stPeserta" style="font-size:26px">–</div>
+        </div>
+        <div class="stat accent-amber">
+          <div class="stat-label">Jenis dominan</div>
+          <div class="stat-value" id="stDominan" style="font-size:18px;margin-top:6px">–</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>Peserta</th>
+                <th>Jenis</th>
+                <th>Ujian</th>
+                <th>Keterangan</th>
+                <th class="center">Bukti</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="6"><div class="empty-state">Memuat data…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="small muted mt-8" id="footNote"></div>
+    </main>
+  </div>
+</div>
+
+<!-- ================= modal bukti ================= -->
+<div class="modal-backdrop" id="buktiModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3 id="bTitle">Bukti tangkapan</h3>
+        <div class="sub" id="bSub">—</div>
+      </div>
+      <button class="x" data-close aria-label="Tutup">✕</button>
+    </div>
+    <div class="modal-body" id="bBody" style="text-align:center"></div>
+    <div class="modal-foot">
+      <button class="btn" data-close>Tutup</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/mock.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/layout.js"></script>
+<script src="../assets/js/pages/admin-laporan.js"></script>
+</body>
+</html>

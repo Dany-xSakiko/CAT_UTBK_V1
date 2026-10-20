@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Pengguna · CAT UTBK</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+
+    <main class="content">
+      <div class="between mb-16">
+        <div class="page-head mb-0">
+          <h1>Data pengguna</h1>
+          <p>Kelola akun admin dan peserta ujian.</p>
+        </div>
+        <button class="btn btn-primary" id="btnAdd"></button>
+      </div>
+
+      <div class="stat-grid mb-24" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+        <div class="stat">
+          <div class="stat-label">Total akun</div>
+          <div class="stat-value" id="stTotal" style="font-size:26px">–</div>
+        </div>
+        <div class="stat accent-green">
+          <div class="stat-label">Peserta</div>
+          <div class="stat-value" id="stPeserta" style="font-size:26px">–</div>
+        </div>
+        <div class="stat accent-amber">
+          <div class="stat-label">Admin</div>
+          <div class="stat-value" id="stAdmin" style="font-size:26px">–</div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="field grow">
+          <label for="fCari">Cari nama / username</label>
+          <input class="input" id="fCari" placeholder="Kata kunci…">
+        </div>
+        <div class="field">
+          <label for="fRole">Peran</label>
+          <select class="select" id="fRole">
+            <option value="">Semua</option>
+            <option value="Peserta">Peserta</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+        <button class="btn" id="btnReset">Reset</button>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:44px">#</th>
+                <th>Nama</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Peran</th>
+                <th>Aktivitas</th>
+                <th class="right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="7"><div class="empty-state">Memuat data…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="small muted mt-8" id="footNote"></div>
+    </main>
+  </div>
+</div>
+
+<!-- ================= modal pengguna ================= -->
+<div class="modal-backdrop" id="userModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3 id="mTitle">Tambah pengguna</h3>
+        <div class="sub" id="mSub">Akun baru langsung dapat digunakan untuk login.</div>
+      </div>
+      <button class="x" data-close aria-label="Tutup">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <form id="formUser" novalidate>
+        <div class="field" id="fNama">
+          <label for="nama">Nama lengkap</label>
+          <input class="input" id="nama" placeholder="cth. Achmaddany Rozaqy" required>
+          <div class="form-error">Nama wajib diisi.</div>
+        </div>
+
+        <div class="field" id="fUsername">
+          <label for="username">Username</label>
+          <input class="input" id="username" placeholder="tanpa spasi" autocomplete="off" required>
+          <div class="form-error">Username minimal 3 karakter.</div>
+        </div>
+
+        <div class="field" id="fPass">
+          <label for="pass">Password</label>
+          <input class="input" id="pass" type="password" autocomplete="new-password" placeholder="minimal 6 karakter">
+          <span class="hint" id="passHint">Kosongkan saat edit bila tidak ingin mengubah password.</span>
+          <div class="form-error">Password minimal 6 karakter.</div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="role">Peran</label>
+            <select class="select" id="role">
+              <option value="Peserta">Peserta</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="email">Email <span class="muted">(opsional)</span></label>
+            <input class="input" id="email" type="email" placeholder="nama@unp.ac.id">
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn" data-close>Batal</button>
+      <button class="btn btn-primary" id="btnSave">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/ui.js"></script>
+<script src="../assets/js/mock.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/layout.js"></script>
+<script src="../assets/js/pages/admin-pengguna.js"></script>
+</body>
+</html>

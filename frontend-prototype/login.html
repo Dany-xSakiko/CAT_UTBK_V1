@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masuk · CAT UTBK</title>
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+
+<div class="auth">
+  <!-- ================= panel kiri ================= -->
+  <aside class="auth-side">
+    <div class="brand">
+      <div class="brand-mark">CAT</div>
+      <div>
+        <b>CAT UTBK</b>
+        <span>Computer Assisted Test</span>
+      </div>
+    </div>
+
+    <div class="auth-hero">
+      <h1>Ujian berbasis komputer dengan <em>pengawasan kamera</em> otomatis.</h1>
+      <p>Sistem CAT yang memantau integritas peserta secara berkala, mencatat setiap pelanggaran, dan menghitung skor secara otomatis.</p>
+
+      <div class="auth-points">
+        <div class="auth-point">
+          <span class="tick">1</span>
+          <div><b>Pengerjaan terstruktur</b><br>Soal pilihan ganda dengan timer dan penyimpanan jawaban otomatis.</div>
+        </div>
+        <div class="auth-point">
+          <span class="tick">2</span>
+          <div><b>Deteksi kecurangan</b><br>Frame kamera dianalisis tiap 3 detik untuk mendeteksi wajah tidak ada atau lebih dari satu.</div>
+        </div>
+        <div class="auth-point">
+          <span class="tick">3</span>
+          <div><b>Laporan pelanggaran</b><br>Setiap anomali tersimpan lengkap dengan waktu dan bukti screenshot.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">
+      Program Studi Teknik Informatika · Universitas Nusantara PGRI Kediri<br>
+      Kelompok 2 — Kelas 4D
+    </div>
+  </aside>
+
+  <!-- ================= panel kanan ================= -->
+  <main class="auth-main">
+    <div class="auth-card">
+      <h2>Masuk ke akun</h2>
+      <p class="lead">Gunakan akun yang diberikan panitia ujian.</p>
+
+      <div class="role-switch" id="roleSwitch" role="tablist" aria-label="Pilih peran">
+        <button type="button" class="active" data-role="Peserta" role="tab" aria-selected="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/></svg>
+          Peserta
+        </button>
+        <button type="button" data-role="Admin" role="tab" aria-selected="false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Admin
+        </button>
+      </div>
+
+      <div id="loginAlert" class="alert alert-danger hidden" style="margin-bottom:16px">
+        <span class="alert-ico"></span>
+        <div><b>Gagal masuk</b><span id="loginAlertMsg">Username atau password salah.</span></div>
+      </div>
+
+      <form id="loginForm" novalidate>
+        <div class="field" id="fUser">
+          <label for="username">Username</label>
+          <div class="input-group">
+            <span class="ico">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/></svg>
+            </span>
+            <input class="input" id="username" name="username" type="text" autocomplete="username"
+                   placeholder="contoh: peserta_001" required>
+          </div>
+          <span class="form-error">Username wajib diisi.</span>
+        </div>
+
+        <div class="field" id="fPass">
+          <label for="password">Password</label>
+          <div class="input-group">
+            <span class="ico">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            </span>
+            <input class="input" id="password" name="password" type="password" autocomplete="current-password"
+                   placeholder="••••••••" required>
+            <button type="button" class="toggle-pass" id="togglePass" aria-label="Tampilkan password">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span class="form-error">Password wajib diisi.</span>
+        </div>
+
+        <div class="between" style="margin:-4px 0 18px">
+          <label class="flex items-center gap-8 small" style="cursor:pointer">
+            <input type="checkbox" id="remember" checked>
+            <span class="muted">Ingat sesi saya</span>
+          </label>
+          <a href="#" class="small" onclick="return false" title="Hubungi panitia ujian">Lupa password?</a>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg btn-block" id="btnLogin">Masuk</button>
+      </form>
+
+      <div class="demo-box" id="demoBox">
+        <b>Akun demo</b> — peserta: <code>peserta_001</code> · admin: <code>admin</code><br>
+        password: <code>demo123</code>
+      </div>
+
+      <p class="foot-note">
+        Dengan masuk, kamu menyetujui pemantauan kamera selama ujian berlangsung.
+      </p>
+    </div>
+  </main>
+</div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/mock.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/pages/login.js"></script>
+</body>
+</html>
