@@ -3,7 +3,7 @@
 Capstone Project · Frontend React + Backend Laravel (REST API + Sanctum).
 
 ```
-CAT_V2/
+CAT_V1/
 ├── backend/               Laravel 13 — REST API, MySQL, Sanctum token
 ├── frontend/              React 19 + Vite — SPA per-halaman (React Router)
 ├── frontend-prototype/    prototipe HTML/CSS/JS statis (acuan desain, tidak dipakai produksi)
