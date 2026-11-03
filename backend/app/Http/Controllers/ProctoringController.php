@@ -20,6 +20,32 @@ class ProctoringController extends Controller
      */
     public function insertLog(Request $request)
     {
+        // Adaptasi / normalisasi parameter dari kontrak modul AI cat_proctoring
+        if (!$request->has('jenis_pelanggaran') && $request->has('status')) {
+            $request->merge(['jenis_pelanggaran' => $request->input('status')]);
+        }
+        if (!$request->hasFile('bukti_screenshot') && $request->hasFile('screenshot')) {
+            $request->files->set('bukti_screenshot', $request->file('screenshot'));
+        }
+        if (!$request->has('id_rekam_jejak') && $request->has('id_ujian') && $request->has('id_user')) {
+            $activeRekam = RekamJejak::where('id_ujian', $request->id_ujian)
+                ->where('id_user', $request->id_user)
+                ->where('status_pengerjaan', 'sedang_mengerjakan')
+                ->latest('waktu_mulai')
+                ->first();
+            if ($activeRekam) {
+                $request->merge(['id_rekam_jejak' => $activeRekam->id_rekam_jejak]);
+            }
+        }
+
+        // Jika status 'Normal', respon sukses tanpa mencatat log pelanggaran
+        if ($request->input('jenis_pelanggaran') === 'Normal') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Status normal diterima (tidak dicatat sebagai pelanggaran)'
+            ], 200);
+        }
+
         // Validasi request
         $validator = Validator::make($request->all(), [
             'id_user' => 'required|integer|exists:pengguna,id_user',

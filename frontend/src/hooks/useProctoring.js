@@ -1,196 +1,264 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Api from '../lib/api'
-
-const INTERVAL = 3000
-const WIDTH = 640
-const QUALITY = 0.72
-const CONF = 0.45
-const COOLDOWN = 12000
+import { DEFAULT_CONFIG, STATUS } from '../ai/config'
+import { createDetector } from '../ai/detector'
+import {
+  AnomalyGate,
+  postprocessDetections,
+  renderPreprocessedFrame,
+  statusFromFaceCount,
+} from '../ai/engine'
 
 /**
- * Kamera + deteksi wajah (face-api.js tiny_face_detector, offline dari /vendor)
- * Kirim log pelanggaran ke Laravel: POST /api/proctoring/log (multipart).
+ * Hook Proctoring Otomatis Berbasis AI (BlazeFace + TensorFlow.js)
+ * Mengawasi kehadiran peserta, mendeteksi wajah tunggal/banyak, serta perpindahan tab.
+ *
+ * @param {Object} params
+ * @param {boolean} params.aktif - Apakah proctoring sedang berjalan
+ * @param {number|string} params.idRekam - ID rekam jejak sesi ujian
+ * @param {number|string} params.idUser - ID peserta ujian
+ * @param {Function} [params.onViolation] - Callback saat peringatan terpicu di antarmuka
  */
 export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
+  const streamRef = useRef(null)
+  const detectorRef = useRef(null)
+  const gateRef = useRef(new AnomalyGate(DEFAULT_CONFIG))
   const timerRef = useRef(null)
   const busyRef = useRef(false)
-  const lastSentRef = useRef({})
-  const streamRef = useRef(null)
-  const modeRef = useRef('none')
+  const lastTabSwitchRef = useRef(0)
 
-  const [status, setStatus] = useState('Normal')
+  const [status, setStatus] = useState(STATUS.NORMAL)
   const [faces, setFaces] = useState(null)
   const [camOk, setCamOk] = useState(false)
   const [camError, setCamError] = useState('')
   const [mode, setMode] = useState('none')
   const [stats, setStats] = useState({ tick: 0, violations: 0 })
 
-  const libRef = useRef(null)
-
-  const loadLib = useCallback(async () => {
-    if (window.faceapi) return 'faceapi'
-    if (!libRef.current) {
-      libRef.current = new Promise((resolve, reject) => {
-        const s = document.createElement('script')
-        s.src = '/vendor/face-api.min.js'
-        s.onload = resolve
-        s.onerror = () => reject(new Error('gagal memuat face-api'))
-        document.head.appendChild(s)
-      })
-    }
-    await libRef.current
-    await window.faceapi.nets.tinyFaceDetector.loadFromUri('/vendor/weights')
-    return 'faceapi'
+  /**
+   * Menghasilkan Blob JPEG dari kanvas frame saat ini sebagai bukti pelanggaran.
+   */
+  const getFrameBlob = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas || canvas.width === 0 || canvas.height === 0) return Promise.resolve(null)
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', DEFAULT_CONFIG.screenshotJpegQuality)
+    })
   }, [])
 
-  const frameBlob = useCallback(async () => {
-    const v = videoRef.current
-    const c = canvasRef.current
-    if (!v?.videoWidth || !c) return null
-    const w = WIDTH
-    const h = Math.round(w * (v.videoHeight / v.videoWidth))
-    c.width = w
-    c.height = h
-    c.getContext('2d').drawImage(v, 0, 0, w, h)
-    return new Promise((res) => c.toBlob(res, 'image/jpeg', QUALITY))
-  }, [])
-
-  const kirim = useCallback(
-    async (jenis, keterangan, force = false) => {
-      const now = Date.now()
-      const gap = force ? 2000 : COOLDOWN
-      if (!force && lastSentRef.current[jenis] && now - lastSentRef.current[jenis] < gap) return
-      lastSentRef.current[jenis] = now
-
-      setStats((s) => ({ ...s, violations: s.violations + 1 }))
-      onViolation?.({ jenis, keterangan, waktu: new Date() })
-
+  /**
+   * Mengirim log pelanggaran ke API Backend Laravel: POST /api/proctoring/log (multipart/form-data)
+   */
+  const kirimLog = useCallback(
+    async (jenis, keterangan, customBlob = null) => {
       if (!idRekam || !idUser) return
+
       try {
-        const blob = await frameBlob()
+        const blob = customBlob || (await getFrameBlob())
         const fd = new FormData()
         fd.append('id_rekam_jejak', String(idRekam))
         fd.append('id_user', String(idUser))
         fd.append('jenis_pelanggaran', jenis)
-        fd.append('keterangan', keterangan)
-        if (blob) fd.append('bukti_screenshot', blob, 'frame.jpg')
+        fd.append('keterangan', keterangan || `Terdeteksi anomali: ${jenis}`)
+        if (blob) {
+          fd.append('bukti_screenshot', blob, 'bukti_pelanggaran.jpg')
+        }
+
         await Api.kirimLog(fd)
-      } catch (e) {
-        console.warn('Gagal kirim log proctoring:', e?.message)
+        setStats((s) => ({ ...s, violations: s.violations + 1 }))
+      } catch (err) {
+        console.warn('[AI Proctoring] Gagal mengirim log ke backend:', err?.message || err)
       }
     },
-    [idRekam, idUser, onViolation, frameBlob]
+    [idRekam, idUser, getFrameBlob]
   )
 
-  const deteksi = useCallback(async () => {
-    const v = videoRef.current
-    if (!v?.videoWidth) return -1
-    if (modeRef.current === 'faceapi' && window.faceapi) {
-      const opt = new window.faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: CONF })
-      const dets = await window.faceapi.detectAllFaces(v, opt)
-      const minW = v.videoWidth * 0.11
-      return dets.filter((d) => d.box.width >= minW).length
-    }
-    if (modeRef.current === 'native' && 'FaceDetector' in window) {
-      try {
-        const fd = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 5 })
-        return (await fd.detect(v)).length
-      } catch {
-        return -1
-      }
-    }
-    return -1
-  }, [])
-
-  const tick = useCallback(async () => {
+  /**
+   * Siklus analisis kamera per interval (default: tiap 3000 ms)
+   */
+  const analyzeCycle = useCallback(async () => {
     if (busyRef.current) return
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const detector = detectorRef.current
+    if (!video || !canvas || !detector || !video.videoWidth) return
+
     busyRef.current = true
     try {
-      const n = await deteksi()
-      setFaces(n)
+      const ctx = canvas.getContext('2d', { willReadFrequently: false })
+      if (!ctx) return
+
+      // 1. Prapemrosesan frame (kontras & kecerahan ditingkatkan)
+      const { width, height } = renderPreprocessedFrame(video, canvas, ctx, DEFAULT_CONFIG)
+
+      // 2. Deteksi wajah dengan model AI (BlazeFace)
+      const rawDetections = await detector.detect(canvas)
+
+      // 3. Pascapemrosesan (clipping, filter ukuran min, NMS IoU)
+      const filteredDetections = postprocessDetections(rawDetections, width, height, DEFAULT_CONFIG)
+      const faceCount = filteredDetections.length
+      setFaces(faceCount)
       setStats((s) => ({ ...s, tick: s.tick + 1 }))
 
-      if (n < 0) {
-        setStatus('Normal')
-      } else if (n === 0) {
-        setStatus('No Face')
-        kirim('No Face', 'Wajah tidak terdeteksi pada frame kamera')
-      } else if (n > 1) {
-        setStatus('Multiple Faces')
-        kirim('Multiple Faces', `Terdeteksi ${n} wajah dalam satu frame`)
-      } else {
-        setStatus('Normal')
+      // 4. Klasifikasi status (Normal, No Face, Multiple Faces)
+      const currentStatus = statusFromFaceCount(faceCount)
+      setStatus(currentStatus)
+
+      // 5. Evaluasi gerbang toleransi anomali (Anomaly Gate)
+      const decision = gateRef.current.evaluate(currentStatus, Date.now())
+
+      if (decision.warn) {
+        const info =
+          currentStatus === STATUS.NO_FACE
+            ? 'Harap fokus ke layar! Wajah peserta tidak terdeteksi oleh kamera.'
+            : 'Harap fokus ke layar! Terdeteksi lebih dari satu orang di depan kamera.'
+
+        onViolation?.({
+          jenis: currentStatus,
+          keterangan: info,
+          waktu: new Date(),
+        })
       }
-    } catch (e) {
-      console.warn('tick error', e)
+
+      if (decision.logged) {
+        const desc =
+          currentStatus === STATUS.NO_FACE
+            ? 'Wajah tidak terdeteksi pada frame kamera'
+            : `Terdeteksi ${faceCount} wajah dalam frame kamera`
+        await kirimLog(currentStatus, desc)
+      }
+    } catch (err) {
+      console.warn('[AI Proctoring] Error pada siklus analisis:', err)
     } finally {
       busyRef.current = false
     }
-  }, [deteksi, kirim])
+  }, [onViolation, kirimLog])
 
+  /**
+   * Lifecycle Kamera & Model AI
+   */
   useEffect(() => {
     if (!aktif) return
-    let cancelled = false
 
-    const mulai = async () => {
-      const v = videoRef.current
-      if (!v) return
-      v.muted = true
-      v.playsInline = true
+    let isSubscribed = true
+    gateRef.current.reset()
+
+    const startProctoring = async () => {
+      const video = videoRef.current
+      if (!video) return
+
+      video.muted = true
+      video.playsInline = true
+
+      // 1. Dapatkan akses kamera
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-          audio: false,
-        })
-        if (cancelled) {
+        const stream = await navigator.mediaDevices.getUserMedia(DEFAULT_CONFIG.cameraConstraints)
+        if (!isSubscribed) {
           stream.getTracks().forEach((t) => t.stop())
           return
         }
+
         streamRef.current = stream
-        v.srcObject = stream
-        await v.play().catch(() => {})
+        video.srcObject = stream
+        await video.play().catch(() => {})
+
+        const track = stream.getVideoTracks()[0]
+        if (track) {
+          track.onended = () => {
+            setCamOk(false)
+            setCamError('Kamera terputus atau dinonaktifkan oleh sistem.')
+          }
+        }
+
         setCamOk(true)
         setCamError('')
-      } catch (e) {
+      } catch (err) {
+        if (!isSubscribed) return
         setCamOk(false)
-        setCamError(e?.name === 'NotAllowedError' ? 'Izin kamera ditolak.' : 'Kamera tidak tersedia.')
+        const msg =
+          err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError'
+            ? 'Izin kamera ditolak. Harap izinkan akses kamera di browser Anda.'
+            : 'Kamera tidak ditemukan atau sedang digunakan aplikasi lain.'
+        setCamError(msg)
         return
       }
 
+      // 2. Muat model AI BlazeFace
       try {
-        modeRef.current = await loadLib()
-      } catch {
-        modeRef.current = 'FaceDetector' in window ? 'native' : 'none'
+        const detector = await createDetector(DEFAULT_CONFIG)
+        if (!isSubscribed) {
+          detector?.dispose?.()
+          return
+        }
+        detectorRef.current = detector
+        setMode(detector.type || 'blazeface')
+      } catch (err) {
+        console.error('[AI Proctoring] Gagal menginisialisasi detector AI:', err)
+        setMode('failed')
       }
-      setMode(modeRef.current)
 
-      timerRef.current = setInterval(tick, INTERVAL)
-      setTimeout(tick, 800)
+      // 3. Jalankan interval sampling 3 detik
+      timerRef.current = setInterval(() => {
+        analyzeCycle()
+      }, DEFAULT_CONFIG.intervalMs)
+
+      // Jalankan sekali di awal setelah pemanasan kamera
+      setTimeout(() => {
+        if (isSubscribed) analyzeCycle()
+      }, 1000)
     }
 
-    const onVis = () => {
+    // 4. Deteksi perpindahan tab browser (Looking Away)
+    const handleVisibility = async () => {
       if (document.hidden) {
-        document.body.dataset.awayFlag = '1'
-      } else if (document.body.dataset.awayFlag === '1') {
-        delete document.body.dataset.awayFlag
-        kirim('Looking Away', 'Peserta berpindah tab atau meninggalkan halaman ujian', true)
+        lastTabSwitchRef.current = Date.now()
+      } else if (lastTabSwitchRef.current > 0) {
+        const now = Date.now()
+        // Pemicu jika peserta meninggalkan tab lebih dari 1.5 detik
+        if (now - lastTabSwitchRef.current >= 1500) {
+          const jenis = STATUS.LOOKING_AWAY
+          const info = 'Harap tetap berada di tab ujian! Peserta terdeteksi berpindah tab atau aplikasi.'
+
+          onViolation?.({
+            jenis,
+            keterangan: info,
+            waktu: new Date(),
+          })
+
+          await kirimLog(jenis, 'Peserta berpindah tab atau meninggalkan jendela browser saat ujian aktif.')
+        }
+        lastTabSwitchRef.current = 0
       }
     }
 
-    document.addEventListener('visibilitychange', onVis)
-    mulai()
+    document.addEventListener('visibilitychange', handleVisibility)
+    startProctoring()
 
     return () => {
-      cancelled = true
-      document.removeEventListener('visibilitychange', onVis)
+      isSubscribed = false
+      document.removeEventListener('visibilitychange', handleVisibility)
       if (timerRef.current) clearInterval(timerRef.current)
-      streamRef.current?.getTracks().forEach((t) => t.stop())
-      streamRef.current = null
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+      }
+      if (detectorRef.current?.dispose) {
+        detectorRef.current.dispose()
+        detectorRef.current = null
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aktif])
+  }, [aktif, analyzeCycle, onViolation, kirimLog])
 
-  return { videoRef, canvasRef, status, faces, camOk, camError, mode, stats, simulasi: kirim }
+  return {
+    videoRef,
+    canvasRef,
+    status,
+    faces,
+    camOk,
+    camError,
+    mode,
+    stats,
+    simulasi: kirimLog,
+  }
 }

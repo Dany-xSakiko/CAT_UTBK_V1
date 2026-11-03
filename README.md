@@ -8,16 +8,17 @@ CAT_V1/
 ├── frontend/              React 19 + Vite — SPA per-halaman (React Router)
 ├── frontend-prototype/    prototipe HTML/CSS/JS statis (acuan desain, tidak dipakai produksi)
 ├── app/ routes/ database/ potongan kode lama (arsip)
-└── README.md
+├── README.md
+└── README_INTEGRASI_AI.md Dokumentasi integrasi modul AI BlazeFace
 ```
 
 ## Menjalankan
 
 Prasyarat (sudah terpasang di mesin ini):
-- PHP 8.3 `C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.exe`
+- PHP 8.3 `C:\laragon\bin\php\php.exe`
 - Composer `C:\laragon\bin\composer\composer.phar`
 - MySQL 8.4 `C:\laragon\bin\mysql\mysql-8.4.3-winx64\bin\mysql.exe` (port 3306)
-- Node + npm
+- Node (v22) + npm `C:\laragon\bin\nodejs\node-v22\`
 
 ### 1. MySQL
 Laragon → Start All, atau manual:
@@ -28,9 +29,9 @@ C:/laragon/bin/mysql/mysql-8.4.3-winx64/bin/mysqld.exe --datadir="C:/laragon/dat
 ### 2. Backend (port 8000)
 ```bash
 cd backend
-C:/laragon/bin/php/php-8.3.33-Win32-vs16-x64/php.exe artisan serve --host=127.0.0.1 --port=8000
+php artisan serve --host=127.0.0.1 --port=8000
 ```
-Database `cat_utbk` sudah dimigrasi + disemai. Untuk reset:
+Database `cat_system` sudah dimigrasi + disemai. Untuk reset:
 ```bash
 php artisan migrate:fresh --seed --force
 ```
@@ -65,16 +66,18 @@ Peserta (`/peserta`):
 - `/peserta/ujian/:idRekam` — pengerjaan: timer, autosave, navigasi soal, tandai, kamera
 - `/peserta/hasil/:idRekam` — skor akhir, rincian, timeline pelanggaran
 
-## Proctoring
+## Proctoring Berbasis AI (BlazeFace + TensorFlow.js)
 
-`frontend/src/hooks/useProctoring.js`:
-- `getUserMedia` → frame tiap 3 detik (`canvas.toBlob`)
-- deteksi wajah `face-api.js` tiny_face_detector dari `public/vendor` (offline)
-- label: `No Face`, `Multiple Faces`, `Looking Away` (pindah tab), plus kirim bukti JPEG
-- kirim ke `POST /api/proctoring/log` (multipart) → tersimpan di `backend/storage/app/public/proctoring`
+Modul AI Computer Vision terintegrasi di `frontend/src/ai/` dan `frontend/src/hooks/useProctoring.js`:
+- Kamera `getUserMedia` memproses frame secara lokal di browser peserta (*client-side inference*) tiap 3 detik.
+- Model CNN **BlazeFace** via TensorFlow.js dengan prapemrosesan kontras (1.1) & kecerahan (1.05) kanvas.
+- Pascapemrosesan *Non-Maximum Suppression* (NMS IoU 0.35) dan ambang batas ukuran wajah minimum (45px).
+- Gerbang toleransi anomali (*Anomaly Gate*): butuh 2 kali sampling berturut-turut sebelum memicu peringatan ke peserta, serta cooldown 25 detik per jenis status.
+- Status deteksi: `Normal`, `No Face`, `Multiple Faces`, dan `Looking Away` (saat berpindah tab browser).
+- Pengiriman bukti: Frame JPEG otomatis dikompresi dan dikirim ke `POST /api/proctoring/log` (multipart) → tersimpan di `backend/storage/app/public/proctoring`.
+- Detail lengkap integrasi teknis dicatat di [README_INTEGRASI_AI.md](README_INTEGRASI_AI.md).
 
-Izin kamera ditolak → UI menampilkan status "Kamera mati" + tombol catat pelanggaran manual
-(ujian tetap bisa dikerjakan).
+Izin kamera ditolak → UI menampilkan status "Kamera tidak aktif" dan ujian tetap dapat dikerjakan.
 
 ## API
 
