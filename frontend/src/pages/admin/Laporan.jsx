@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import Icon from '../../lib/icons'
 import Api, { pesanError } from '../../lib/api'
 import { tanggal, jamDetik, JENIS_WARNA } from '../../lib/format'
-import { Modal, useToast } from '../../components/ui'
+import { Modal, useConfirm, useToast } from '../../components/ui'
 
 export default function AdminLaporan() {
   const toast = useToast()
+  const confirm = useConfirm()
   const [rows, setRows] = useState([])
   const [memuat, setMemuat] = useState(true)
   const [cari, setCari] = useState('')
@@ -13,17 +14,35 @@ export default function AdminLaporan() {
   const [ujian, setUjian] = useState('')
   const [bukti, setBukti] = useState(null)
 
-  useEffect(() => {
-    let alive = true
+  const muat = () => {
+    setMemuat(true)
     Api.laporanProctoring()
-      .then((r) => alive && setRows(r.data || []))
-      .catch((e) => alive && toast(pesanError(e), 'err'))
-      .finally(() => alive && setMemuat(false))
-    return () => {
-      alive = false
-    }
+      .then((r) => setRows(r.data || []))
+      .catch((e) => toast(pesanError(e), 'err'))
+      .finally(() => setMemuat(false))
+  }
+
+  useEffect(() => {
+    muat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const diskualifikasi = async (l) => {
+    if (!l.id_rekam_jejak) return
+    const ok = await confirm({
+      title: 'Diskualifikasi peserta?',
+      message: `${l.nama_peserta} (${l.username_peserta}) pada ujian "${l.mata_kuliah}" akan didiskualifikasi dan sesinya ditutup.`,
+      yes: 'Diskualifikasi',
+    })
+    if (!ok) return
+    try {
+      await Api.diskualifikasi(l.id_rekam_jejak, `Bukti pelanggaran: ${l.jenis_pelanggaran}`)
+      toast('Peserta telah didiskualifikasi.')
+      muat()
+    } catch (e) {
+      toast(pesanError(e), 'err')
+    }
+  }
 
   const daftarUjian = useMemo(() => {
     const set = new Set(rows.map((r) => r.mata_kuliah).filter(Boolean))
@@ -169,19 +188,20 @@ export default function AdminLaporan() {
                 <th>Ujian</th>
                 <th>Keterangan</th>
                 <th className="center">Bukti</th>
+                <th className="right">Tindakan</th>
               </tr>
             </thead>
             <tbody>
               {memuat && (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <div className="empty-state">Memuat data…</div>
                   </td>
                 </tr>
               )}
               {!memuat && data.length === 0 && (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <div className="empty-state">Tidak ada kejadian yang cocok dengan filter.</div>
                   </td>
                 </tr>
@@ -212,6 +232,22 @@ export default function AdminLaporan() {
                           title="Lihat bukti"
                         >
                           <Icon name="eye" size={15} />
+                        </button>
+                      ) : (
+                        <span className="tiny muted">—</span>
+                      )}
+                    </td>
+                    <td className="right">
+                      {l.status_pengerjaan === 'diskualifikasi' ? (
+                        <span className="badge badge-red">Didiskualifikasi</span>
+                      ) : l.id_rekam_jejak && l.jenis_pelanggaran !== 'Normal' ? (
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          style={{ color: 'var(--red-600)' }}
+                          onClick={() => diskualifikasi(l)}
+                          title="Diskualifikasi peserta"
+                        >
+                          Diskualifikasi
                         </button>
                       ) : (
                         <span className="tiny muted">—</span>

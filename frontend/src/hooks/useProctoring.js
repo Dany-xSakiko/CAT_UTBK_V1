@@ -10,16 +10,10 @@ import {
 } from '../ai/engine'
 
 /**
- * Hook Proctoring Otomatis Berbasis AI (BlazeFace + TensorFlow.js)
- * Mengawasi kehadiran peserta, mendeteksi wajah tunggal/banyak, serta perpindahan tab.
- *
- * @param {Object} params
- * @param {boolean} params.aktif - Apakah proctoring sedang berjalan
- * @param {number|string} params.idRekam - ID rekam jejak sesi ujian
- * @param {number|string} params.idUser - ID peserta ujian
- * @param {Function} [params.onViolation] - Callback saat peringatan terpicu di antarmuka
+ * Hook Proctoring Otomatis Berbasis AI (BlazeFace + TensorFlow.js / Fallback Lokal)
+ * Kamera dan model AI diinisialisasi secara paralel agar deteksi pertama langsung aktif.
  */
-export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
+export default function useProctoring({ aktif, idRekam, idUser, initialViolations = 0, onViolation }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -33,12 +27,15 @@ export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
   const [faces, setFaces] = useState(null)
   const [camOk, setCamOk] = useState(false)
   const [camError, setCamError] = useState('')
-  const [mode, setMode] = useState('none')
-  const [stats, setStats] = useState({ tick: 0, violations: 0 })
+  const [mode, setMode] = useState('loading')
+  const [stats, setStats] = useState({ tick: 0, violations: Number(initialViolations) || 0 })
 
-  /**
-   * Menghasilkan Blob JPEG dari kanvas frame saat ini sebagai bukti pelanggaran.
-   */
+  // Sinkronkan jumlah pelanggaran awal dari database saat sesi dimuat
+  useEffect(() => {
+    const n = Number(initialViolations) || 0
+    setStats((s) => (n > s.violations ? { ...s, violations: n } : s))
+  }, [initialViolations])
+
   const getFrameBlob = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas || canvas.width === 0 || canvas.height === 0) return Promise.resolve(null)
@@ -47,18 +44,19 @@ export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
     })
   }, [])
 
-  /**
-   * Mengirim log pelanggaran ke API Backend Laravel: POST /api/proctoring/log (multipart/form-data)
-   */
   const kirimLog = useCallback(
     async (jenis, keterangan, customBlob = null) => {
-      if (!idRekam || !idUser) return
+      // Update counter di UI secara instan begitu pelanggaran terpicu
+      if (jenis && jenis !== STATUS.NORMAL) {
+        setStats((s) => ({ ...s, violations: s.violations + 1 }))
+      }
+      if (!idRekam) return
 
       try {
         const blob = customBlob || (await getFrameBlob())
         const fd = new FormData()
         fd.append('id_rekam_jejak', String(idRekam))
-        fd.append('id_user', String(idUser))
+        if (idUser) fd.append('id_user', String(idUser))
         fd.append('jenis_pelanggaran', jenis)
         fd.append('keterangan', keterangan || `Terdeteksi anomali: ${jenis}`)
         if (blob) {
@@ -66,7 +64,6 @@ export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
         }
 
         await Api.kirimLog(fd)
-        setStats((s) => ({ ...s, violations: s.violations + 1 }))
       } catch (err) {
         console.warn('[AI Proctoring] Gagal mengirim log ke backend:', err?.message || err)
       }
@@ -74,9 +71,6 @@ export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
     [idRekam, idUser, getFrameBlob]
   )
 
-  /**
-   * Siklus analisis kamera per interval (default: tiap 3000 ms)
-   */
   const analyzeCycle = useCallback(async () => {
     if (busyRef.current) return
     const video = videoRef.current
@@ -86,26 +80,19 @@ export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
 
     busyRef.current = true
     try {
-      const ctx = canvas.getContext('2d', { willReadFrequently: false })
+      const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: false })
       if (!ctx) return
 
-      // 1. Prapemrosesan frame (kontras & kecerahan ditingkatkan)
       const { width, height } = renderPreprocessedFrame(video, canvas, ctx, DEFAULT_CONFIG)
-
-      // 2. Deteksi wajah dengan model AI (BlazeFace)
       const rawDetections = await detector.detect(canvas)
-
-      // 3. Pascapemrosesan (clipping, filter ukuran min, NMS IoU)
       const filteredDetections = postprocessDetections(rawDetections, width, height, DEFAULT_CONFIG)
       const faceCount = filteredDetections.length
       setFaces(faceCount)
       setStats((s) => ({ ...s, tick: s.tick + 1 }))
 
-      // 4. Klasifikasi status (Normal, No Face, Multiple Faces)
       const currentStatus = statusFromFaceCount(faceCount)
       setStatus(currentStatus)
 
-      // 5. Evaluasi gerbang toleransi anomali (Anomaly Gate)
       const decision = gateRef.current.evaluate(currentStatus, Date.now())
 
       if (decision.warn) {
@@ -135,28 +122,24 @@ export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
     }
   }, [onViolation, kirimLog])
 
-  /**
-   * Lifecycle Kamera & Model AI
-   */
   useEffect(() => {
     if (!aktif) return
 
     let isSubscribed = true
     gateRef.current.reset()
 
-    const startProctoring = async () => {
+    const initCamera = async () => {
       const video = videoRef.current
-      if (!video) return
+      if (!video) return false
 
       video.muted = true
       video.playsInline = true
 
-      // 1. Dapatkan akses kamera
       try {
         const stream = await navigator.mediaDevices.getUserMedia(DEFAULT_CONFIG.cameraConstraints)
         if (!isSubscribed) {
           stream.getTracks().forEach((t) => t.stop())
-          return
+          return false
         }
 
         streamRef.current = stream
@@ -167,55 +150,66 @@ export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
         if (track) {
           track.onended = () => {
             setCamOk(false)
-            setCamError('Kamera terputus atau dinonaktifkan oleh sistem.')
+            const msg = 'Kamera terputus atau dinonaktifkan saat ujian berlangsung.'
+            setCamError(msg)
+            kirimLog(STATUS.SUSPICIOUS, msg)
           }
         }
 
         setCamOk(true)
         setCamError('')
+        return true
       } catch (err) {
-        if (!isSubscribed) return
+        if (!isSubscribed) return false
         setCamOk(false)
         const msg =
           err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError'
-            ? 'Izin kamera ditolak. Harap izinkan akses kamera di browser Anda.'
+            ? 'Izin kamera ditolak oleh peserta.'
             : 'Kamera tidak ditemukan atau sedang digunakan aplikasi lain.'
         setCamError(msg)
-        return
+        kirimLog(STATUS.SUSPICIOUS, msg)
+        return false
       }
+    }
 
-      // 2. Muat model AI BlazeFace
+    const initDetector = async () => {
       try {
         const detector = await createDetector(DEFAULT_CONFIG)
-        if (!isSubscribed) {
-          detector?.dispose?.()
-          return
-        }
+        if (!isSubscribed) return false
         detectorRef.current = detector
         setMode(detector.type || 'blazeface')
+        return true
       } catch (err) {
         console.error('[AI Proctoring] Gagal menginisialisasi detector AI:', err)
-        setMode('failed')
+        if (isSubscribed) {
+          setMode('failed')
+          kirimLog(STATUS.SUSPICIOUS, 'Modul deteksi wajah gagal dimuat di browser peserta.')
+        }
+        return false
+      }
+    }
+
+    const startProctoring = async () => {
+      const [camReady, aiReady] = await Promise.all([initCamera(), initDetector()])
+      if (!isSubscribed || !camReady || !aiReady) return
+
+      const video = videoRef.current
+      if (video && video.videoWidth > 0) {
+        analyzeCycle()
+      } else if (video) {
+        video.addEventListener('loadeddata', () => isSubscribed && analyzeCycle(), { once: true })
       }
 
-      // 3. Jalankan interval sampling 3 detik
       timerRef.current = setInterval(() => {
         analyzeCycle()
       }, DEFAULT_CONFIG.intervalMs)
-
-      // Jalankan sekali di awal setelah pemanasan kamera
-      setTimeout(() => {
-        if (isSubscribed) analyzeCycle()
-      }, 1000)
     }
 
-    // 4. Deteksi perpindahan tab browser (Looking Away)
     const handleVisibility = async () => {
       if (document.hidden) {
         lastTabSwitchRef.current = Date.now()
       } else if (lastTabSwitchRef.current > 0) {
         const now = Date.now()
-        // Pemicu jika peserta meninggalkan tab lebih dari 1.5 detik
         if (now - lastTabSwitchRef.current >= 1500) {
           const jenis = STATUS.LOOKING_AWAY
           const info = 'Harap tetap berada di tab ujian! Peserta terdeteksi berpindah tab atau aplikasi.'
@@ -243,10 +237,7 @@ export default function useProctoring({ aktif, idRekam, idUser, onViolation }) {
         streamRef.current.getTracks().forEach((t) => t.stop())
         streamRef.current = null
       }
-      if (detectorRef.current?.dispose) {
-        detectorRef.current.dispose()
-        detectorRef.current = null
-      }
+      detectorRef.current = null
     }
   }, [aktif, analyzeCycle, onViolation, kirimLog])
 

@@ -105,6 +105,8 @@ class AdminDashboardController extends Controller
             ->map(function($log) {
                 return [
                     'id_log' => $log->id_log,
+                    'id_rekam_jejak' => $log->id_rekam_jejak,
+                    'status_pengerjaan' => $log->rekamJejak->status_pengerjaan,
                     'nama_peserta' => $log->pengguna->nama_lengkap,
                     'username_peserta' => $log->pengguna->username,
                     'waktu_kejadian' => $log->timestamp->format('Y-m-d H:i:s'),
@@ -138,6 +140,8 @@ class AdminDashboardController extends Controller
             ->map(function($log) {
                 return [
                     'id_log' => $log->id_log,
+                    'id_rekam_jejak' => $log->id_rekam_jejak,
+                    'status_pengerjaan' => $log->rekamJejak->status_pengerjaan,
                     'nama_peserta' => $log->pengguna->nama_lengkap,
                     'username' => $log->pengguna->username,
                     'waktu_kejadian' => $log->timestamp->format('Y-m-d H:i:s'),

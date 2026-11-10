@@ -19,7 +19,7 @@ export default function PesertaUjian() {
   const [idx, setIdx] = useState(0)
   const [jawab, setJawab] = useState({})
   const [flag, setFlag] = useState(() => new Set())
-  const [sisa, setSisa] = useState(0)
+  const [sisa, setSisa] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [note, setNote] = useState('Jawaban tersimpan otomatis')
@@ -33,6 +33,30 @@ export default function PesertaUjian() {
   const soal = data?.soal || []
   const aktif = data?.rekam?.status_pengerjaan === 'sedang_mengerjakan'
 
+  const selesai = useCallback(
+    async (otomatis = false) => {
+      if (selesaiRef.current) return
+      selesaiRef.current = true
+      setMengirim(true)
+      setWarn(null)
+      try {
+        await Api.selesai(id)
+        toast(otomatis ? 'Waktu habis — jawaban otomatis dikumpulkan.' : 'Jawaban dikirim.')
+        nav(`/peserta/hasil/${id}`, { replace: true })
+      } catch (e) {
+        if (e?.response?.status === 409) {
+          nav(`/peserta/hasil/${id}`, { replace: true })
+          return
+        }
+        selesaiRef.current = false
+        toast(pesanError(e), 'err')
+      } finally {
+        setMengirim(false)
+      }
+    },
+    [id, nav, toast]
+  )
+
   /* ------------------------------------------------ muat sesi */
   useEffect(() => {
     let alive = true
@@ -45,48 +69,33 @@ export default function PesertaUjian() {
           nav(`/peserta/hasil/${id}`, { replace: true })
           return
         }
+        const sisaAwal = Math.max(0, Number(d.rekam.sisa_detik) || 0)
+        const jmlPelanggaranAwal = (d.log || []).filter((l) => l.jenis_pelanggaran !== 'Normal').length
         setData(d)
         setJawab(d.jawaban || {})
-        setSisa(Number(d.rekam.sisa_detik) || 0)
+        setWarnCount(jmlPelanggaranAwal)
+        setSisa(sisaAwal)
+        if (sisaAwal <= 0) {
+          selesai(true)
+        }
       })
       .catch((e) => alive && setErr(pesanError(e)))
       .finally(() => alive && setLoading(false))
     return () => {
       alive = false
     }
-  }, [id, nav])
+  }, [id, nav, selesai])
 
   /* ------------------------------------------------ timer */
   useEffect(() => {
-    if (!data) return
-    if (sisa <= 0) return
-    const t = setInterval(() => setSisa((s) => Math.max(0, s - 1)), 1000)
+    if (!data || sisa === null || sisa <= 0) return
+    const t = setInterval(() => setSisa((s) => (s === null ? 0 : Math.max(0, s - 1))), 1000)
     return () => clearInterval(t)
-  }, [data, sisa <= 0])
-
-  const selesai = useCallback(
-    async (otomatis = false) => {
-      if (selesaiRef.current) return
-      selesaiRef.current = true
-      setMengirim(true)
-      try {
-        await Api.selesai(id)
-        toast(otomatis ? 'Waktu habis — jawaban otomatis dikumpulkan.' : 'Jawaban dikirim.')
-        nav(`/peserta/hasil/${id}`, { replace: true })
-      } catch (e) {
-        selesaiRef.current = false
-        toast(pesanError(e), 'err')
-      } finally {
-        setMengirim(false)
-      }
-    },
-    [id, nav, toast]
-  )
+  }, [data, sisa === null, sisa !== null && sisa <= 0])
 
   useEffect(() => {
     if (data && sisa === 0 && aktif) selesai(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sisa, data])
+  }, [sisa, data, aktif, selesai])
 
   useEffect(() => {
     if (!aktif) return
@@ -105,10 +114,16 @@ export default function PesertaUjian() {
     setTimeout(() => setWarn(null), 6000)
   }, [])
 
+  const initialViolations = useMemo(
+    () => (data?.log || []).filter((l) => l.jenis_pelanggaran !== 'Normal').length,
+    [data]
+  )
+
   const proctor = useProctoring({
     aktif: !!data && aktif,
     idRekam: data?.rekam?.id_rekam_jejak,
     idUser: user?.id_user,
+    initialViolations,
     onViolation,
   })
 
@@ -122,6 +137,11 @@ export default function PesertaUjian() {
       await Api.jawab(id, { id_soal: s.id_soal, jawaban: kunci })
       setNote('Jawaban tersimpan otomatis')
     } catch (e) {
+      if (e?.response?.data?.ditutup) {
+        toast(pesanError(e), 'err')
+        nav(`/peserta/hasil/${id}`, { replace: true })
+        return
+      }
       setNote('Gagal menyimpan')
       toast(pesanError(e), 'err')
     }
@@ -192,11 +212,17 @@ export default function PesertaUjian() {
         <div className="timer">
           <div>
             <div className="t-label">Sisa waktu</div>
-            <div className="t-value">{durasi(sisa)}</div>
+            <div className="t-value">{durasi(sisa ?? 0)}</div>
           </div>
         </div>
 
-        <button className="btn btn-primary" onClick={() => setModal(true)}>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            setWarn(null)
+            setModal(true)
+          }}
+        >
           Selesai ujian
         </button>
       </header>
@@ -253,13 +279,24 @@ export default function PesertaUjian() {
             </button>
             <div className="spacer" />
             <span className="small muted">{note}</span>
-            <button
-              className="btn btn-primary"
-              onClick={() => setIdx((i) => Math.min(soal.length - 1, i + 1))}
-              disabled={idx === soal.length - 1}
-            >
-              {idx === soal.length - 1 ? 'Soal terakhir' : 'Berikutnya'}
-            </button>
+            {idx === soal.length - 1 ? (
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setWarn(null)
+                  setModal(true)
+                }}
+              >
+                Selesai ujian
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                onClick={() => setIdx((i) => Math.min(soal.length - 1, i + 1))}
+              >
+                Berikutnya
+              </button>
+            )}
           </div>
         </section>
 
@@ -271,7 +308,7 @@ export default function PesertaUjian() {
               {terjawab}/{soal.length}
             </span>
           </div>
-          <div className="nav-grid">
+          <div className="nav-grid" style={{ maxHeight: 280, overflowY: 'auto' }}>
             {soal.map((q, i) => (
               <button
                 key={q.id_soal}
@@ -341,7 +378,7 @@ export default function PesertaUjian() {
       </div>
 
       {/* ---------------------------- overlay peringatan ---------------------------- */}
-      {warn && (
+      {warn && !modal && (
         <div className="warn-overlay open">
           <div className="warn-box">
             <div className="ring">
@@ -350,7 +387,7 @@ export default function PesertaUjian() {
             <h3>{warn.jenis}</h3>
             <p>{warn.keterangan || 'Pastikan kamu berada di depan kamera.'}</p>
             <div className="counter">
-              Peringatan {warnCount} dari 12 · {jamDetik(new Date().toISOString())}
+              Peringatan {proctor.stats.violations} dari 12 · {jamDetik(new Date().toISOString())}
             </div>
             <button className="btn btn-primary btn-lg" onClick={() => setWarn(null)}>
               Saya mengerti

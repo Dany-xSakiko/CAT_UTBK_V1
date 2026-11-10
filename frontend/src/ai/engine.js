@@ -15,9 +15,7 @@ export function intersectionOverUnion(a, b) {
 
 /**
  * Prapemrosesan frame dari elemen video ke elemen canvas:
- * 1. Rescaling proporsional sesuai maxFrameDimension untuk menjaga performa.
- * 2. Penyesuaian kontras dan kecerahan (contrast & brightness filter) untuk membantu
- *    deteksi wajah di kondisi pencahayaan minim.
+ * Rescaling proporsional sesuai maxFrameDimension (320px) agar transfer piksel ke GPU cepat.
  */
 export function renderPreprocessedFrame(source, canvas, context, config = DEFAULT_CONFIG) {
   const sourceWidth = source.videoWidth || source.naturalWidth || source.width
@@ -35,12 +33,14 @@ export function renderPreprocessedFrame(source, canvas, context, config = DEFAUL
     canvas.height = height
   }
 
-  context.clearRect(0, 0, width, height)
-  context.filter = `contrast(${config.contrast}) brightness(${config.brightness})`
+  const useFilter = (config.contrast && config.contrast !== 1) || (config.brightness && config.brightness !== 1)
+  if (useFilter) {
+    context.filter = `contrast(${config.contrast}) brightness(${config.brightness})`
+  }
   try {
     context.drawImage(source, 0, 0, width, height)
   } finally {
-    context.filter = 'none'
+    if (useFilter) context.filter = 'none'
   }
 
   return { width, height, scaleX: sourceWidth / width, scaleY: sourceHeight / height }
@@ -77,10 +77,8 @@ export function postprocessDetections(detections, width, height, config = DEFAUL
     return [{ box: [x, y, clippedW, clippedH], confidence }]
   })
 
-  // Urutkan kandidat berdasarkan confidence tertinggi
   candidates.sort((a, b) => b.confidence - a.confidence)
 
-  // NMS filtering
   const kept = []
   for (const candidate of candidates) {
     if (kept.every((selected) => intersectionOverUnion(candidate.box, selected.box) <= config.nmsIouThreshold)) {
@@ -103,9 +101,9 @@ export function statusFromFaceCount(count) {
 
 /**
  * Gerbang toleransi anomali (Anomaly Gate):
- * Mencegah *false positive* (misal peserta berkedip atau menunduk sesaat) dengan
- * mengharuskan kemunculan status anomali beberapa kali berturut-turut (consecutiveAnomalies)
- * sebelum memicu peringatan ke UI dan pengiriman log ke backend (dibatasi cooldown).
+ * - Setiap transisi ke status anomali baru (setelah Normal) langsung dihitung & dicatat.
+ * - Jika peserta terus-menerus berada di anomali yang sama tanpa kembali Normal,
+ *   pelanggaran berikutnya dicatat ulang setiap `anomalyCooldownMs`.
  */
 export class AnomalyGate {
   constructor(config = DEFAULT_CONFIG) {
@@ -132,29 +130,28 @@ export class AnomalyGate {
       this.warnedStatus = null
     }
 
-    // Butuh N kali anomali berturut-turut sebelum trigger peringatan
     if (this.consecutiveCount < this.config.consecutiveAnomalies) {
       return { warn: false, logged: false }
     }
 
-    // Peringatan ke antarmuka muncul sekali per transisi status anomali
-    const warn = this.warnedStatus !== status
-    this.warnedStatus = status
-
-    // Pencatatan ke backend dibatasi cooldown agar database tidak dibanjiri request berlebih
+    const isNewEpisode = this.warnedStatus !== status
     const lastLogged = this.lastLoggedAt.get(status) ?? Number.NEGATIVE_INFINITY
-    const logged = now - lastLogged >= this.config.anomalyCooldownMs
-    if (logged) {
+    const cooldownElapsed = now - lastLogged >= this.config.anomalyCooldownMs
+
+    // Episode pelanggaran baru ATAU anomali berkepanjangan melewati cooldown -> hitung & catat
+    if (isNewEpisode || cooldownElapsed) {
+      this.warnedStatus = status
       this.lastLoggedAt.set(status, now)
+      return { warn: true, logged: true }
     }
 
-    return { warn, logged }
+    return { warn: false, logged: false }
   }
 
   reset() {
     this.consecutiveCount = 0
     this.lastStatus = null
     this.warnedStatus = null
+    this.lastLoggedAt.clear()
   }
 }
-

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 class RekamJejak extends Model
 {
@@ -91,6 +92,34 @@ class RekamJejak extends Model
         }
         
         return 0;
+    }
+
+    /**
+     * Batas waktu pengerjaan: waktu_mulai + durasi, tetapi tidak melewati
+     * akhir jadwal ujian (sesi UTBK ditutup serentak saat jadwal berakhir).
+     */
+    public function deadline(): ?Carbon
+    {
+        if (! $this->waktu_mulai || ! $this->ujian) {
+            return null;
+        }
+
+        $batasDurasi = $this->waktu_mulai->copy()->addMinutes((int) $this->ujian->durasi_menit);
+        $batasJadwal = $this->ujian->jadwalSelesai();
+
+        return $batasDurasi->lt($batasJadwal) ? $batasDurasi : $batasJadwal;
+    }
+
+    public function sedangBerjalan(): bool
+    {
+        return $this->status_pengerjaan === 'sedang_mengerjakan';
+    }
+
+    public function lewatDeadline(?Carbon $now = null): bool
+    {
+        $deadline = $this->deadline();
+
+        return $deadline !== null && ($now ?? now())->gte($deadline);
     }
 
     /** serialisasi tanggal pakai zona waktu aplikasi (tanpa konversi UTC) */

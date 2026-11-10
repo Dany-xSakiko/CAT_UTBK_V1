@@ -92,9 +92,9 @@ class DatabaseSeeder extends Seeder
         DB::table('ujian')->insert([
             [
                 'judul_mata_kuliah' => 'Pemrograman Web Lanjut',
-                'tanggal' => '2026-10-15',
-                'waktu_mulai' => '08:00:00',
-                'waktu_selesai' => '10:00:00',
+                'tanggal' => now()->toDateString(),
+                'waktu_mulai' => '00:00:00',
+                'waktu_selesai' => '23:59:00',
                 'durasi_menit' => 120,
                 'status_aktif' => true,
                 'created_at' => now(),
@@ -102,9 +102,9 @@ class DatabaseSeeder extends Seeder
             ],
             [
                 'judul_mata_kuliah' => 'Basis Data',
-                'tanggal' => '2026-10-16',
-                'waktu_mulai' => '13:00:00',
-                'waktu_selesai' => '15:00:00',
+                'tanggal' => now()->toDateString(),
+                'waktu_mulai' => '00:00:00',
+                'waktu_selesai' => '23:59:00',
                 'durasi_menit' => 120,
                 'status_aktif' => true,
                 'created_at' => now(),
@@ -112,7 +112,7 @@ class DatabaseSeeder extends Seeder
             ],
             [
                 'judul_mata_kuliah' => 'Kecerdasan Buatan',
-                'tanggal' => '2026-10-17',
+                'tanggal' => now()->addDay()->toDateString(),
                 'waktu_mulai' => '08:00:00',
                 'waktu_selesai' => '09:30:00',
                 'durasi_menit' => 90,

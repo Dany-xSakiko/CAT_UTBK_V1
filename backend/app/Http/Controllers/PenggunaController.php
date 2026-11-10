@@ -12,7 +12,9 @@ class PenggunaController extends Controller
     /** GET /api/pengguna (admin) */
     public function index(Request $request)
     {
-        $q = Pengguna::query()->orderByRaw("FIELD(role, 'Admin', 'Peserta')")->orderBy('nama_lengkap');
+        $q = Pengguna::query()
+            ->orderByRaw("CASE WHEN role = 'Admin' THEN 0 ELSE 1 END")
+            ->orderBy('nama_lengkap');
 
         if ($request->filled('role')) {
             $q->where('role', $request->string('role'));

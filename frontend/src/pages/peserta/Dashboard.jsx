@@ -5,6 +5,7 @@ import Api, { pesanError } from '../../lib/api'
 import { tanggal, jam, tanggalPanjang, durasiMenit } from '../../lib/format'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../components/ui'
+import { preloadDetector } from '../../ai/detector'
 
 export default function PesertaDashboard() {
   const { user } = useAuth()
@@ -29,6 +30,8 @@ export default function PesertaDashboard() {
 
   useEffect(() => {
     muat()
+    // muat model AI di belakang layar saat peserta melihat daftar ujian
+    preloadDetector()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -39,8 +42,10 @@ export default function PesertaDashboard() {
       return { key: 'dq', label: 'Diskualifikasi', cls: 'badge-red' }
     if (r?.status_pengerjaan === 'sedang_mengerjakan')
       return { key: 'jalan', label: 'Sedang dikerjakan', cls: 'badge-amber' }
-    if (u.status_aktif) return { key: 'buka', label: 'Dibuka', cls: 'badge-blue' }
-    return { key: 'tutup', label: 'Belum dibuka', cls: '' }
+    if (!u.status_aktif) return { key: 'tutup', label: 'Belum dibuka', cls: '' }
+    if (u.status_jadwal === 'belum') return { key: 'terjadwal', label: 'Terjadwal', cls: 'badge-amber' }
+    if (u.status_jadwal === 'lewat') return { key: 'berakhir', label: 'Jadwal berakhir', cls: '' }
+    return { key: 'buka', label: 'Dibuka', cls: 'badge-blue' }
   }
 
   const riwayat = useMemo(
@@ -114,6 +119,18 @@ export default function PesertaDashboard() {
               <Icon name="play" size={14} /> Mulai ujian
             </>
           )}
+        </button>
+      )
+    } else if (st.key === 'terjadwal') {
+      aksi = (
+        <button className="btn btn-sm" disabled>
+          Dimulai {jam(u.waktu_mulai)}
+        </button>
+      )
+    } else if (st.key === 'berakhir') {
+      aksi = (
+        <button className="btn btn-sm" disabled>
+          Jadwal berakhir
         </button>
       )
     } else {

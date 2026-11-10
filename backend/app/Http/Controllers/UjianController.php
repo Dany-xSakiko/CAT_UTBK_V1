@@ -2,70 +2,104 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\JawabanPeserta;
+use App\Models\LogProctoring;
 use App\Models\RekamJejak;
 use App\Models\Soal;
 use App\Models\Ujian;
+use App\Services\PenilaianService;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class UjianController extends Controller
 {
+    public function __construct(private PenilaianService $penilaian) {}
+
     /** GET /api/ujian — admin lihat semua, peserta hanya yang aktif + riwayatnya */
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = Ujian::query()->orderByDesc('tanggal')->orderBy('waktu_mulai');
+        $isPeserta = $user->role === 'Peserta';
 
-        if ($user->role === 'Peserta') {
+        $query = Ujian::query()
+            ->withCount('soal as jumlah_soal')
+            ->orderByDesc('tanggal')
+            ->orderBy('waktu_mulai');
+
+        if ($isPeserta) {
             $query->where('status_aktif', true);
         }
 
-        $ujian = $query->get()->map(function (Ujian $u) use ($user) {
+        $ujian = $query->get();
+        $ids = $ujian->pluck('id_ujian');
+
+        // agregat sekali jalan (menghindari N+1 query per ujian)
+        $jumlahPeserta = RekamJejak::whereIn('id_ujian', $ids)
+            ->selectRaw('id_ujian, COUNT(DISTINCT id_user) as n')
+            ->groupBy('id_ujian')
+            ->pluck('n', 'id_ujian');
+
+        $rekamUser = RekamJejak::with('ujian')
+            ->where('id_user', $user->id_user)
+            ->whereIn('id_ujian', $ids)
+            ->get()
+            ->each(fn (RekamJejak $r) => $this->penilaian->tutupJikaKedaluwarsa($r))
+            ->keyBy('id_ujian');
+
+        $pelanggaran = LogProctoring::whereIn('id_rekam_jejak', $rekamUser->pluck('id_rekam_jejak'))
+            ->where('jenis_pelanggaran', '!=', 'Normal')
+            ->selectRaw('id_rekam_jejak, COUNT(*) as n')
+            ->groupBy('id_rekam_jejak')
+            ->pluck('n', 'id_rekam_jejak');
+
+        $data = $ujian->map(function (Ujian $u) use ($jumlahPeserta, $rekamUser, $pelanggaran) {
             $row = $u->toArray();
-            $row['jumlah_soal'] = Soal::where('id_ujian', $u->id_ujian)->count();
-            $row['jumlah_peserta'] = RekamJejak::where('id_ujian', $u->id_ujian)
-                ->distinct('id_user')
-                ->count('id_user');
+            $row['jumlah_soal'] = (int) $u->jumlah_soal;
+            $row['jumlah_peserta'] = (int) ($jumlahPeserta[$u->id_ujian] ?? 0);
+            $row['status_jadwal'] = $u->statusJadwal();
+            $row['jadwal_mulai'] = $u->jadwalMulai()->format('Y-m-d\TH:i:s');
+            $row['jadwal_selesai'] = $u->jadwalSelesai()->format('Y-m-d\TH:i:s');
 
-            $rekam = RekamJejak::where('id_user', $user->id_user)
-                ->where('id_ujian', $u->id_ujian)
-                ->first();
-
+            $rekam = $rekamUser->get($u->id_ujian);
             $row['rekam'] = $rekam ? [
-                'id_rekam_jejak'    => $rekam->id_rekam_jejak,
-                'status_pengerjaan' => $rekam->status_pengerjaan,
-                'skor_akhir'        => $rekam->skor_akhir,
-                'waktu_mulai'       => $rekam->waktu_mulai
-                    ? $rekam->waktu_mulai->format('Y-m-d\TH:i:s')
-                    : null,
-                'waktu_selesai'     => $rekam->waktu_selesai
-                    ? $rekam->waktu_selesai->format('Y-m-d\TH:i:s')
-                    : null,
-                'jumlah_pelanggaran' => \App\Models\LogProctoring::where('id_rekam_jejak', $rekam->id_rekam_jejak)
-                    ->where('jenis_pelanggaran', '!=', 'Normal')
-                    ->count(),
+                'id_rekam_jejak'     => $rekam->id_rekam_jejak,
+                'status_pengerjaan'  => $rekam->status_pengerjaan,
+                'skor_akhir'         => $rekam->skor_akhir,
+                'waktu_mulai'        => $rekam->waktu_mulai?->format('Y-m-d\TH:i:s'),
+                'waktu_selesai'      => $rekam->waktu_selesai?->format('Y-m-d\TH:i:s'),
+                'jumlah_pelanggaran' => (int) ($pelanggaran[$rekam->id_rekam_jejak] ?? 0),
             ] : null;
 
             return $row;
         });
 
-        return response()->json(['success' => true, 'data' => $ujian]);
+        return response()->json(['success' => true, 'data' => $data]);
     }
 
-    /** GET /api/ujian/{id} — detail + daftar soal (kunci hanya untuk admin) */
+    /**
+     * GET /api/ujian/{id}
+     * Admin: detail + daftar soal lengkap dengan kunci.
+     * Peserta: hanya info ujian aktif (soal TIDAK dikirim supaya tidak bocor sebelum ujian).
+     */
     public function show(Request $request, $id)
     {
         $ujian = Ujian::findOrFail($id);
         $isAdmin = $request->user()->role === 'Admin';
 
-        $soal = Soal::where('id_ujian', $ujian->id_ujian)
-            ->orderBy('nomor_urut')
-            ->get()
-            ->map(fn (Soal $s) => $this->formatSoal($s, $isAdmin));
+        if (! $isAdmin && ! $ujian->status_aktif) {
+            return response()->json(['success' => false, 'message' => 'Ujian tidak ditemukan.'], 404);
+        }
 
         $data = $ujian->toArray();
-        $data['jumlah_soal'] = $soal->count();
-        $data['soal'] = $soal;
+        $data['jumlah_soal'] = Soal::where('id_ujian', $ujian->id_ujian)->count();
+        $data['maks_soal'] = SoalController::MAKS_SOAL;
+        $data['status_jadwal'] = $ujian->statusJadwal();
+
+        if ($isAdmin) {
+            $data['soal'] = Soal::where('id_ujian', $ujian->id_ujian)
+                ->orderBy('nomor_urut')
+                ->get()
+                ->map(fn (Soal $s) => $this->formatSoal($s, true));
+        }
 
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -114,11 +148,45 @@ class UjianController extends Controller
         $user = $request->user();
         $ujian = Ujian::findOrFail($id);
 
-        if (! $ujian->status_aktif && $user->role === 'Peserta') {
+        if (! $ujian->status_aktif) {
             return response()->json([
                 'success' => false,
                 'message' => 'Ujian ini sedang tidak aktif.',
             ], 422);
+        }
+
+        $rekam = RekamJejak::with('ujian')
+            ->where('id_user', $user->id_user)
+            ->where('id_ujian', $ujian->id_ujian)
+            ->first();
+
+        if ($rekam) {
+            $this->penilaian->tutupJikaKedaluwarsa($rekam);
+        }
+
+        if ($rekam && ! $rekam->sedangBerjalan()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ujian ini sudah kamu kerjakan.',
+                'rekam'   => ['id_rekam_jejak' => $rekam->id_rekam_jejak],
+            ], 409);
+        }
+
+        // sesi baru hanya boleh dibuat di dalam jendela jadwal; sesi berjalan boleh dilanjutkan
+        if (! $rekam) {
+            $jadwal = $ujian->statusJadwal();
+            if ($jadwal === 'belum') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ujian belum dimulai. Jadwal: ' . $ujian->jadwalMulai()->translatedFormat('d M Y H:i') . '.',
+                ], 422);
+            }
+            if ($jadwal === 'lewat') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Jadwal ujian sudah berakhir.',
+                ], 422);
+            }
         }
 
         $soal = Soal::where('id_ujian', $ujian->id_ujian)
@@ -132,25 +200,18 @@ class UjianController extends Controller
             ], 422);
         }
 
-        $rekam = RekamJejak::firstOrCreate(
+        $rekam ??= RekamJejak::firstOrCreate(
             ['id_user' => $user->id_user, 'id_ujian' => $ujian->id_ujian],
             [
-                'waktu_mulai'    => now(),
-                'total_soal'     => $soal->count(),
+                'waktu_mulai'       => now(),
+                'total_soal'        => $soal->count(),
                 'status_pengerjaan' => 'sedang_mengerjakan',
             ]
         );
+        $rekam->setRelation('ujian', $ujian);
 
-        if ($rekam->status_pengerjaan === 'selesai' || $rekam->status_pengerjaan === 'diskualifikasi') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ujian ini sudah kamu kerjakan.',
-                'rekam'   => ['id_rekam_jejak' => $rekam->id_rekam_jejak],
-            ], 409);
-        }
-
-        $deadline = $rekam->waktu_mulai->copy()->addMinutes($ujian->durasi_menit);
-        $sisaDetik = now()->greaterThan($deadline) ? 0 : now()->diffInSeconds($deadline, false);
+        $deadline = $rekam->deadline();
+        $sisaDetik = $deadline ? max(0, (int) now()->diffInSeconds($deadline, false)) : 0;
 
         return response()->json([
             'success' => true,
@@ -160,12 +221,12 @@ class UjianController extends Controller
                     'waktu_mulai'       => $rekam->waktu_mulai->format('Y-m-d\TH:i:s'),
                     'status_pengerjaan' => $rekam->status_pengerjaan,
                     'durasi_menit'      => $ujian->durasi_menit,
-                    'sisa_detik'        => max(0, (int) $sisaDetik),
-                    'deadline'          => $deadline->format('Y-m-d\TH:i:s'),
+                    'sisa_detik'        => $sisaDetik,
+                    'deadline'          => $deadline?->format('Y-m-d\TH:i:s'),
                 ],
-                'ujian'  => $ujian,
-                'soal'   => $soal->map(fn (Soal $s) => $this->formatSoal($s, false)),
-                'jawaban' => \App\Models\JawabanPeserta::where('id_rekam_jejak', $rekam->id_rekam_jejak)
+                'ujian'   => $ujian,
+                'soal'    => $soal->map(fn (Soal $s) => $this->formatSoal($s, false)),
+                'jawaban' => JawabanPeserta::where('id_rekam_jejak', $rekam->id_rekam_jejak)
                     ->get()
                     ->keyBy('id_soal')
                     ->map(fn ($j) => $j->jawaban_dipilih),

@@ -6,24 +6,29 @@ use App\Models\JawabanPeserta;
 use App\Models\LogProctoring;
 use App\Models\RekamJejak;
 use App\Models\Soal;
+use App\Services\PenilaianService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class RekamController extends Controller
 {
+    public function __construct(private PenilaianService $penilaian) {}
+
     /** GET /api/rekam/{id} — peserta pemilik atau admin */
     public function show(Request $request, $id)
     {
         $rekam = RekamJejak::with(['ujian'])->findOrFail($id);
         $user = $request->user();
 
-        if ($user->role === 'Peserta' && $rekam->id_user !== $user->id_user) {
+        if ($user->role === 'Peserta' && ! $this->milik($rekam, $user)) {
             return response()->json(['success' => false, 'message' => 'Tidak punya akses ke rekam ini.'], 403);
         }
 
+        // sesi yang waktunya sudah habis langsung dinilai (tidak bergantung pada browser peserta)
+        $this->penilaian->tutupJikaKedaluwarsa($rekam);
+
         $soal = Soal::where('id_ujian', $rekam->id_ujian)->orderBy('nomor_urut')->get();
         $jawaban = JawabanPeserta::where('id_rekam_jejak', $rekam->id_rekam_jejak)->get();
-        $selesai = $rekam->status_pengerjaan !== 'sedang_mengerjakan';
+        $selesai = ! $rekam->sedangBerjalan();
         $petaJawaban = $jawaban->keyBy('id_soal');
 
         return response()->json([
@@ -64,18 +69,18 @@ class RekamController extends Controller
     /** POST /api/rekam/{id}/jawab — body { id_soal, jawaban } */
     public function jawab(Request $request, $id)
     {
-        $rekam = RekamJejak::findOrFail($id);
+        $rekam = RekamJejak::with('ujian')->findOrFail($id);
         $user = $request->user();
 
         // pengerjaan hanya boleh oleh pemilik sesi (admin cukup memantau)
-        if ($rekam->id_user !== $user->id_user) {
+        if (! $this->milik($rekam, $user)) {
             return response()->json(['success' => false, 'message' => 'Hanya peserta pemilik sesi yang boleh menjawab.'], 403);
         }
-        if ($rekam->status_pengerjaan !== 'sedang_mengerjakan') {
-            return response()->json(['success' => false, 'message' => 'Sesi ujian sudah ditutup.'], 409);
+        if ($this->penilaian->tutupJikaKedaluwarsa($rekam)) {
+            return response()->json(['success' => false, 'message' => 'Waktu ujian sudah habis.', 'ditutup' => true], 409);
         }
-        if ($this->lewatDeadline($rekam)) {
-            return response()->json(['success' => false, 'message' => 'Waktu ujian sudah habis.'], 409);
+        if (! $rekam->sedangBerjalan()) {
+            return response()->json(['success' => false, 'message' => 'Sesi ujian sudah ditutup.', 'ditutup' => true], 409);
         }
 
         $data = $request->validate([
@@ -84,7 +89,7 @@ class RekamController extends Controller
         ]);
 
         $soal = Soal::findOrFail($data['id_soal']);
-        if ($soal->id_ujian !== $rekam->id_ujian) {
+        if ((int) $soal->id_ujian !== (int) $rekam->id_ujian) {
             return response()->json(['success' => false, 'message' => 'Soal bukan bagian dari ujian ini.'], 422);
         }
 
@@ -107,46 +112,17 @@ class RekamController extends Controller
         ]);
     }
 
-    /** POST /api/rekam/{id}/selesai — hitung skor & tutup sesi */
+    /** POST /api/rekam/{id}/selesai — hitung skor & tutup sesi (idempoten) */
     public function selesai(Request $request, $id)
     {
-        $rekam = RekamJejak::findOrFail($id);
+        $rekam = RekamJejak::with('ujian')->findOrFail($id);
         $user = $request->user();
 
-        if ($rekam->id_user !== $user->id_user) {
+        if (! $this->milik($rekam, $user)) {
             return response()->json(['success' => false, 'message' => 'Hanya peserta pemilik sesi yang boleh menyelesaikan ujian.'], 403);
         }
 
-        if ($rekam->status_pengerjaan === 'sedang_mengerjakan') {
-            DB::transaction(function () use ($rekam) {
-                $totalSoal = Soal::where('id_ujian', $rekam->id_ujian)->count();
-
-                // sinkronkan status benar/salah dengan kunci terbaru
-                $jawaban = JawabanPeserta::where('id_rekam_jejak', $rekam->id_rekam_jejak)->get();
-                foreach ($jawaban as $j) {
-                    $kunci = Soal::whereKey($j->id_soal)->value('kunci_jawaban');
-                    $benar = $j->jawaban_dipilih === $kunci;
-                    if ($j->status_benar_salah !== $benar) {
-                        $j->update(['status_benar_salah' => $benar]);
-                    }
-                }
-
-                $benar = JawabanPeserta::where('id_rekam_jejak', $rekam->id_rekam_jejak)
-                    ->where('status_benar_salah', true)
-                    ->count();
-
-                $rekam->update([
-                    'waktu_selesai'     => now(),
-                    'total_soal'        => $totalSoal,
-                    'total_benar'       => $benar,
-                    'total_salah'       => max(0, $totalSoal - $benar),
-                    'skor_akhir'        => $totalSoal > 0 ? round($benar / $totalSoal * 100, 2) : 0,
-                    'status_pengerjaan' => 'selesai',
-                ]);
-            });
-        }
-
-        $rekam->refresh();
+        $this->penilaian->tutup($rekam);
 
         return response()->json([
             'success' => true,
@@ -155,17 +131,47 @@ class RekamController extends Controller
         ]);
     }
 
-    private function lewatDeadline(RekamJejak $rekam): bool
+    /** POST /api/admin/rekam/{id}/diskualifikasi (admin) */
+    public function diskualifikasi(Request $request, $id)
     {
-        $durasi = (int) $rekam->ujian->durasi_menit;
+        $rekam = RekamJejak::with('ujian')->findOrFail($id);
 
-        return now()->greaterThan($rekam->waktu_mulai->copy()->addMinutes($durasi));
+        if ($rekam->status_pengerjaan === 'diskualifikasi') {
+            return response()->json(['success' => false, 'message' => 'Peserta sudah didiskualifikasi.'], 409);
+        }
+
+        $data = $request->validate(['alasan' => ['nullable', 'string', 'max:500']]);
+
+        $this->penilaian->tutup($rekam, 'diskualifikasi');
+
+        // catat keputusan admin di log proctoring sebagai jejak audit
+        LogProctoring::create([
+            'id_rekam_jejak'    => $rekam->id_rekam_jejak,
+            'id_user'           => $rekam->id_user,
+            'timestamp'         => now(),
+            'jenis_pelanggaran' => 'Suspicious Activity',
+            'keterangan'        => 'Didiskualifikasi oleh admin ' . $request->user()->username
+                . (! empty($data['alasan']) ? ': ' . $data['alasan'] : '.'),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Peserta didiskualifikasi.',
+            'data'    => $this->formatRekam($rekam->refresh()),
+        ]);
+    }
+
+    private function milik(RekamJejak $rekam, $user): bool
+    {
+        // cast eksplisit: driver DB tertentu mengembalikan kolom FK sebagai string
+        return (int) $rekam->id_user === (int) $user->id_user;
     }
 
     private function formatRekam(RekamJejak $rekam): array
     {
+        $rekam->loadMissing('ujian');
         $durasi = (int) ($rekam->ujian->durasi_menit ?? 0);
-        $deadline = $rekam->waktu_mulai?->copy()->addMinutes($durasi);
+        $deadline = $rekam->deadline();
         $sisa = $deadline ? now()->diffInSeconds($deadline, false) : 0;
 
         return [
@@ -180,7 +186,7 @@ class RekamController extends Controller
             'total_salah'       => (int) $rekam->total_salah,
             'status_pengerjaan' => $rekam->status_pengerjaan,
             'durasi_menit'      => $durasi,
-            'sisa_detik'        => max(0, (int) $sisa),
+            'sisa_detik'        => $rekam->sedangBerjalan() ? max(0, (int) $sisa) : 0,
             'deadline'          => $deadline?->format('Y-m-d\TH:i:s'),
         ];
     }

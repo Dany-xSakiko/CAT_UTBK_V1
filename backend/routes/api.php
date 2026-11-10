@@ -18,8 +18,8 @@ use Illuminate\Support\Facades\Route;
 | Auth: Bearer token (Laravel Sanctum)
 */
 
-// ---------- Auth ----------
-Route::post('/login', [AuthController::class, 'login']);
+// ---------- Auth (dibatasi 10 percobaan/menit per IP untuk cegah brute-force) ----------
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
@@ -39,6 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // ---------- Soal ----------
         Route::get('/soal', [SoalController::class, 'index']);
         Route::post('/soal', [SoalController::class, 'store']);
+        Route::post('/soal/batch', [SoalController::class, 'batchStore']);
         Route::put('/soal/{id}', [SoalController::class, 'update']);
         Route::delete('/soal/{id}', [SoalController::class, 'destroy']);
 
@@ -47,6 +48,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/pengguna', [PenggunaController::class, 'store']);
         Route::put('/pengguna/{id}', [PenggunaController::class, 'update']);
         Route::delete('/pengguna/{id}', [PenggunaController::class, 'destroy']);
+
+        // ---------- Tindakan admin pada sesi ujian ----------
+        Route::post('/admin/rekam/{id}/diskualifikasi', [RekamController::class, 'diskualifikasi']);
 
         // ---------- Statistik & laporan ----------
         Route::get('/admin/statistik/ringkasan', [StatistikController::class, 'ringkasan']);
@@ -69,7 +73,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/rekam/{id}/selesai', [RekamController::class, 'selesai']);
 
     // ---------- Proctoring ----------
-    Route::post('/proctoring/log', [ProctoringController::class, 'insertLog']);
-    Route::post('/proctoring/log/base64', [ProctoringController::class, 'insertLogBase64']);
+    Route::post('/proctoring/log', [ProctoringController::class, 'insertLog'])
+        ->middleware('throttle:60,1');
+    Route::post('/proctoring/log/base64', [ProctoringController::class, 'insertLogBase64'])
+        ->middleware('throttle:60,1');
     Route::get('/proctoring/logs/{idRekamJejak}', [ProctoringController::class, 'getLogsByRekamJejak']);
 });

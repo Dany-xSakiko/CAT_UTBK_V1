@@ -66,6 +66,7 @@ export const Api = {
   // ---------- soal ----------
   listSoal: (ujianId) => http.get('/soal', { params: { ujian_id: ujianId } }).then(d),
   createSoal: (payload) => http.post('/soal', payload).then(d),
+  createSoalBatch: (payload) => http.post('/soal/batch', payload).then(d),
   updateSoal: (id, payload) => http.put(`/soal/${id}`, payload).then(d),
   deleteSoal: (id) => http.delete(`/soal/${id}`).then(d),
 
@@ -79,6 +80,7 @@ export const Api = {
   getRekam: (id) => http.get(`/rekam/${id}`).then(d),
   jawab: (rekamId, payload) => http.post(`/rekam/${rekamId}/jawab`, payload).then(d),
   selesai: (rekamId) => http.post(`/rekam/${rekamId}/selesai`).then(d),
+  diskualifikasi: (rekamId, alasan) => http.post(`/admin/rekam/${rekamId}/diskualifikasi`, { alasan }).then(d),
 
   // ---------- proctoring ----------
   kirimLog: (payload) => http.post('/proctoring/log', payload).then(d),
