@@ -122,6 +122,23 @@ class RekamJejak extends Model
         return $deadline !== null && ($now ?? now())->gte($deadline);
     }
 
+    /**
+     * Mengacak penempatan soal setiap kali peserta masuk sesi atau me-refresh halaman.
+     * Jawaban peserta tetap aman karena disimpan berdasarkan id_soal.
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\Soal>  $soal
+     * @return \Illuminate\Support\Collection<int, \App\Models\Soal>
+     */
+    public function urutkanSoalUntukPeserta($soal)
+    {
+        $this->loadMissing('ujian');
+        if ($this->ujian && $this->ujian->acak_soal === false) {
+            return $soal->values();
+        }
+
+        return $soal->shuffle()->values();
+    }
+
     /** serialisasi tanggal pakai zona waktu aplikasi (tanpa konversi UTC) */
     protected function serializeDate(\DateTimeInterface $date): string
     {

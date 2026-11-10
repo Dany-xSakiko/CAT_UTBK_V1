@@ -16,6 +16,9 @@ const buatButirKosong = () => ({
   opsi_d: '',
   opsi_e: '',
   kunci_jawaban: 'A',
+  gambar_file: null,
+  gambar_preview: '',
+  hapus_gambar: false,
 })
 
 export default function AdminSoal() {
@@ -28,6 +31,7 @@ export default function AdminSoal() {
   const [rows, setRows] = useState([])
   const [memuat, setMemuat] = useState(false)
   const [cari, setCari] = useState('')
+  const [zoomGambar, setZoomGambar] = useState(null)
 
   // modal edit / tambah 1 soal
   const [open, setOpen] = useState(false)
@@ -42,6 +46,16 @@ export default function AdminSoal() {
   const [daftarBaru, setDaftarBaru] = useState(() => [buatButirKosong()])
   const [salahBanyak, setSalahBanyak] = useState({})
   const [simpanBanyak, setSimpanBanyak] = useState(false)
+
+  // modal ambil dari Bank Soal (salin soal & gambar dari ujian lain di Bank Soal)
+  const [openBank, setOpenBank] = useState(false)
+  const [bankRows, setBankRows] = useState([])
+  const [memuatBank, setMemuatBank] = useState(false)
+  const [filterUjianAsal, setFilterUjianAsal] = useState('')
+  const [hanyaBergambar, setHanyaBergambar] = useState(false)
+  const [cariBank, setCariBank] = useState('')
+  const [pilihBank, setPilihBank] = useState(() => new Set())
+  const [simpanBank, setSimpanBank] = useState(false)
 
   useEffect(() => {
     Api.listUjian()
@@ -115,10 +129,37 @@ export default function AdminSoal() {
             opsi_d: s.opsi?.D || '',
             opsi_e: s.opsi?.E || '',
             kunci_jawaban: s.kunci_jawaban || 'A',
+            gambar_file: null,
+            gambar_preview: s.gambar_url || '',
+            hapus_gambar: false,
           }
         : buatButirKosong()
     )
     setOpen(true)
+  }
+
+  const pilihGambarSatuan = (file) => {
+    if (!file) return
+    if (file.size > 4 * 1024 * 1024) {
+      toast('Ukuran gambar maksimal 4 MB.', 'err')
+      return
+    }
+    const url = URL.createObjectURL(file)
+    setForm((f) => ({
+      ...f,
+      gambar_file: file,
+      gambar_preview: url,
+      hapus_gambar: false,
+    }))
+  }
+
+  const hapusGambarSatuan = () => {
+    setForm((f) => ({
+      ...f,
+      gambar_file: null,
+      gambar_preview: '',
+      hapus_gambar: true,
+    }))
   }
 
   const simpanForm = async (lanjutTambah = false) => {
@@ -132,19 +173,25 @@ export default function AdminSoal() {
 
     setSimpan(true)
     try {
-      const payload = {
-        id_ujian: Number(idUjian),
-        nomor_urut: form.nomor_urut ? Number(form.nomor_urut) : undefined,
-        teks_soal: form.teks_soal.trim(),
-        opsi_a: form.opsi_a.trim(),
-        opsi_b: form.opsi_b.trim(),
-        opsi_c: form.opsi_c.trim(),
-        opsi_d: form.opsi_d.trim(),
-        opsi_e: form.opsi_e.trim(),
-        kunci_jawaban: form.kunci_jawaban,
+      const fd = new FormData()
+      fd.append('id_ujian', String(Number(idUjian)))
+      if (form.nomor_urut) fd.append('nomor_urut', String(Number(form.nomor_urut)))
+      fd.append('teks_soal', form.teks_soal.trim())
+      fd.append('opsi_a', form.opsi_a.trim())
+      fd.append('opsi_b', form.opsi_b.trim())
+      fd.append('opsi_c', form.opsi_c.trim())
+      fd.append('opsi_d', form.opsi_d.trim())
+      fd.append('opsi_e', form.opsi_e.trim())
+      fd.append('kunci_jawaban', form.kunci_jawaban)
+
+      if (form.gambar_file) {
+        fd.append('gambar_soal', form.gambar_file)
+      } else if (form.hapus_gambar) {
+        fd.append('hapus_gambar', '1')
       }
-      if (edit) await Api.updateSoal(edit.id_soal, payload)
-      else await Api.createSoal(payload)
+
+      if (edit) await Api.updateSoal(edit.id_soal, fd)
+      else await Api.createSoal(fd)
 
       toast(edit ? 'Soal diperbarui.' : 'Soal ditambahkan.')
       await muatSoal(idUjian)
@@ -189,6 +236,24 @@ export default function AdminSoal() {
     setDaftarBaru((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: val } : it)))
   }
 
+  const pilihGambarButir = (idx, file) => {
+    if (!file) return
+    if (file.size > 4 * 1024 * 1024) {
+      toast('Ukuran gambar maksimal 4 MB.', 'err')
+      return
+    }
+    const url = URL.createObjectURL(file)
+    setDaftarBaru((prev) =>
+      prev.map((it, i) => (i === idx ? { ...it, gambar_file: file, gambar_preview: url } : it))
+    )
+  }
+
+  const hapusGambarButir = (idx) => {
+    setDaftarBaru((prev) =>
+      prev.map((it, i) => (i === idx ? { ...it, gambar_file: null, gambar_preview: '' } : it))
+    )
+  }
+
   const hapusBarisButir = (idx) => {
     setDaftarBaru((prev) => {
       const next = prev.filter((_, i) => i !== idx)
@@ -212,20 +277,23 @@ export default function AdminSoal() {
 
     setSimpanBanyak(true)
     try {
-      const payload = {
-        id_ujian: Number(idUjian),
-        soal: daftarBaru.map((b) => ({
-          nomor_urut: b.nomor_urut ? Number(b.nomor_urut) : undefined,
-          teks_soal: b.teks_soal.trim(),
-          opsi_a: b.opsi_a.trim(),
-          opsi_b: b.opsi_b.trim(),
-          opsi_c: b.opsi_c.trim(),
-          opsi_d: b.opsi_d.trim(),
-          opsi_e: b.opsi_e.trim(),
-          kunci_jawaban: b.kunci_jawaban,
-        })),
-      }
-      await Api.createSoalBatch(payload)
+      const fd = new FormData()
+      fd.append('id_ujian', String(Number(idUjian)))
+      daftarBaru.forEach((b, i) => {
+        if (b.nomor_urut) fd.append(`soal[${i}][nomor_urut]`, String(Number(b.nomor_urut)))
+        fd.append(`soal[${i}][teks_soal]`, b.teks_soal.trim())
+        fd.append(`soal[${i}][opsi_a]`, b.opsi_a.trim())
+        fd.append(`soal[${i}][opsi_b]`, b.opsi_b.trim())
+        fd.append(`soal[${i}][opsi_c]`, b.opsi_c.trim())
+        fd.append(`soal[${i}][opsi_d]`, b.opsi_d.trim())
+        fd.append(`soal[${i}][opsi_e]`, b.opsi_e.trim())
+        fd.append(`soal[${i}][kunci_jawaban]`, b.kunci_jawaban)
+        if (b.gambar_file) {
+          fd.append(`soal[${i}][gambar_soal]`, b.gambar_file)
+        }
+      })
+
+      await Api.createSoalBatch(fd)
       setOpenBanyak(false)
       toast(`${daftarBaru.length} soal berhasil ditambahkan.`)
       muatSoal(idUjian)
@@ -252,14 +320,95 @@ export default function AdminSoal() {
     }
   }
 
+  /* ------------------------------------------------ ambil dari Bank Soal */
+  const bukaModalBank = async () => {
+    if (penuh) {
+      toast(`Jumlah soal sudah mencapai batas maksimal ${MAKS_SOAL} soal.`, 'err')
+      return
+    }
+    setOpenBank(true)
+    setPilihBank(new Set())
+    setFilterUjianAsal('')
+    setCariBank('')
+    setMemuatBank(true)
+    try {
+      const res = await Api.bankSoal({ exclude_ujian: idUjian })
+      setBankRows(res.data || [])
+    } catch (e) {
+      toast(pesanError(e), 'err')
+    } finally {
+      setMemuatBank(false)
+    }
+  }
+
+  const bankTersaring = useMemo(() => {
+    const q = cariBank.trim().toLowerCase()
+    return bankRows.filter((s) => {
+      if (filterUjianAsal && String(s.id_ujian) !== String(filterUjianAsal)) return false
+      if (hanyaBergambar && !s.gambar_url) return false
+      if (q && !s.teks_soal?.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [bankRows, filterUjianAsal, hanyaBergambar, cariBank])
+
+  const togglePilihSoalBank = (idSoal) => {
+    setPilihBank((prev) => {
+      const next = new Set(prev)
+      if (next.has(idSoal)) next.delete(idSoal)
+      else if (next.size < sisaSlot) next.add(idSoal)
+      else toast(`Maksimal dapat memilih ${sisaSlot} soal lagi sesuai sisa kuota.`, 'err')
+      return next
+    })
+  }
+
+  const pilihSemuaBankTersaring = () => {
+    setPilihBank((prev) => {
+      const next = new Set(prev)
+      for (const s of bankTersaring) {
+        if (next.size >= sisaSlot) break
+        next.add(s.id_soal)
+      }
+      return next
+    })
+  }
+
+  const simpanDariBank = async () => {
+    if (pilihBank.size === 0) {
+      toast('Pilih minimal 1 soal dari Bank Soal.', 'err')
+      return
+    }
+    setSimpanBank(true)
+    try {
+      await Api.salinSoal({
+        id_ujian: Number(idUjian),
+        id_soal: [...pilihBank],
+      })
+      setOpenBank(false)
+      toast(`${pilihBank.size} soal berhasil diambil dari Bank Soal.`)
+      muatSoal(idUjian)
+    } catch (e) {
+      toast(pesanError(e), 'err')
+    } finally {
+      setSimpanBank(false)
+    }
+  }
+
   return (
     <>
       <div className="between mb-16">
         <div className="page-head mb-0">
           <h1>Bank soal</h1>
-          <p>Kelola butir soal pilihan ganda (maksimal {MAKS_SOAL} soal per ujian).</p>
+          <p>Kelola butir soal pilihan ganda & lampiran gambar (maksimal {MAKS_SOAL} soal per ujian).</p>
         </div>
-        <div className="flex gap-8">
+        <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
+          <button
+            className="btn"
+            onClick={bukaModalBank}
+            disabled={!idUjian || penuh}
+            title={penuh ? `Sudah mencapai batas ${MAKS_SOAL} soal` : 'Ambil soal beserta gambarnya dari Bank Soal'}
+          >
+            <Icon name="book" size={16} /> Ambil dari Bank Soal
+          </button>
           <button
             className="btn"
             onClick={bukaModalBanyak}
@@ -321,7 +470,8 @@ export default function AdminSoal() {
               </span>
             </div>
             <div>
-              Durasi {aktif.durasi_menit} menit · {aktif.status_aktif ? 'status aktif' : 'status nonaktif'}
+              Durasi {aktif.durasi_menit} menit · {aktif.status_aktif ? 'status aktif' : 'status nonaktif'} ·{' '}
+              {aktif.acak_soal !== false ? 'urutan soal diacak per peserta' : 'urutan soal tetap'}
               {penuh && ' · Kuota maksimal 100 soal sudah terpenuhi.'}
             </div>
           </div>
@@ -342,6 +492,9 @@ export default function AdminSoal() {
               <tr>
                 <th style={{ width: 56 }}>No</th>
                 <th>Soal</th>
+                <th style={{ width: 96 }} className="center">
+                  Gambar
+                </th>
                 <th>Opsi</th>
                 <th style={{ width: 80 }} className="center">
                   Kunci
@@ -352,14 +505,14 @@ export default function AdminSoal() {
             <tbody>
               {memuat && (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="empty-state">Memuat soal…</div>
                   </td>
                 </tr>
               )}
               {!memuat && data.length === 0 && (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="empty-state">
                       {idUjian
                         ? 'Belum ada soal untuk ujian ini. Tambahkan soal pertama.'
@@ -374,6 +527,30 @@ export default function AdminSoal() {
                     <td className="num muted">{s.nomor_urut}</td>
                     <td>
                       <div className="strong small">{s.teks_soal}</div>
+                    </td>
+                    <td className="center">
+                      {s.gambar_url ? (
+                        <button
+                          type="button"
+                          onClick={() => setZoomGambar(s)}
+                          style={{
+                            border: '1px solid var(--line)',
+                            background: '#fff',
+                            padding: 2,
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                          title="Klik untuk memperbesar gambar soal"
+                        >
+                          <img
+                            src={s.gambar_url}
+                            alt={`Soal ${s.nomor_urut}`}
+                            style={{ width: 52, height: 38, objectFit: 'cover', borderRadius: 4, display: 'block' }}
+                          />
+                        </button>
+                      ) : (
+                        <span className="tiny muted">—</span>
+                      )}
                     </td>
                     <td className="tiny muted">
                       {HURUF.filter((h) => s.opsi?.[h])
@@ -404,6 +581,29 @@ export default function AdminSoal() {
           </table>
         </div>
       </div>
+
+      {/* ---------------------------- modal preview gambar ---------------------------- */}
+      <Modal
+        open={!!zoomGambar}
+        onClose={() => setZoomGambar(null)}
+        title={`Gambar soal #${zoomGambar?.nomor_urut ?? ''}`}
+        subtitle={zoomGambar?.teks_soal}
+        footer={
+          <button className="btn" onClick={() => setZoomGambar(null)}>
+            Tutup
+          </button>
+        }
+      >
+        {zoomGambar?.gambar_url && (
+          <div style={{ textAlign: 'center' }}>
+            <img
+              src={zoomGambar.gambar_url}
+              alt="Gambar soal"
+              style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 10 }}
+            />
+          </div>
+        )}
+      </Modal>
 
       {/* ---------------------------- modal 1 soal ---------------------------- */}
       <Modal
@@ -483,6 +683,49 @@ export default function AdminSoal() {
               required
             />
             <div className="form-error">Pertanyaan wajib diisi.</div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="gambarSoal">Gambar pendukung soal (opsional)</label>
+            <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
+              <input
+                className="input"
+                id="gambarSoal"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={(e) => pilihGambarSatuan(e.target.files?.[0] || null)}
+                style={{ maxWidth: 320 }}
+              />
+              {form.gambar_preview && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  style={{ color: 'var(--red-600)' }}
+                  onClick={hapusGambarSatuan}
+                >
+                  <Icon name="trash" size={14} /> Hapus gambar
+                </button>
+              )}
+            </div>
+            <span className="hint">Format JPG, PNG, WEBP, atau GIF · maksimal 4 MB.</span>
+            {form.gambar_preview && (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: 10,
+                  border: '1px solid var(--line)',
+                  borderRadius: 10,
+                  background: '#f8fafc',
+                  textAlign: 'center',
+                }}
+              >
+                <img
+                  src={form.gambar_preview}
+                  alt="Preview gambar soal"
+                  style={{ maxWidth: '100%', maxHeight: 220, borderRadius: 8 }}
+                />
+              </div>
+            )}
           </div>
 
           <div className={`field${salah.opsi ? ' has-error' : ''}`}>
@@ -606,6 +849,35 @@ export default function AdminSoal() {
                 />
               </div>
 
+              <div className="field">
+                <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
+                  <input
+                    className="input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={(e) => pilihGambarButir(i, e.target.files?.[0] || null)}
+                    style={{ maxWidth: 280 }}
+                  />
+                  {b.gambar_preview && (
+                    <>
+                      <img
+                        src={b.gambar_preview}
+                        alt="Preview"
+                        style={{ height: 42, borderRadius: 6, border: '1px solid var(--line)' }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        style={{ color: 'var(--red-600)' }}
+                        onClick={() => hapusGambarButir(i)}
+                      >
+                        Hapus gambar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
               <div className="stack gap-8">
                 {HURUF.map((h) => (
                   <div className="flex items-center gap-8" key={h}>
@@ -621,6 +893,155 @@ export default function AdminSoal() {
               </div>
             </div>
           ))}
+        </div>
+      </Modal>
+      {/* ---------------------------- modal ambil dari Bank Soal ---------------------------- */}
+      <Modal
+        open={openBank}
+        onClose={() => setOpenBank(false)}
+        wide
+        title="Ambil Soal dari Bank Soal"
+        subtitle={
+          aktif
+            ? `Salin ke "${aktif.judul_mata_kuliah}" · Dipilih ${pilihBank.size} soal (sisa slot ${sisaSlot})`
+            : '—'
+        }
+        footer={
+          <>
+            <button className="btn" onClick={() => setOpenBank(false)}>
+              Batal
+            </button>
+            <Tombol
+              loading={simpanBank}
+              onClick={simpanDariBank}
+              disabled={pilihBank.size === 0}
+              className="btn btn-primary"
+            >
+              Tambahkan {pilihBank.size} soal terpilih
+            </Tombol>
+          </>
+        }
+      >
+        <div className="filter-bar mb-16" style={{ gap: 10 }}>
+          <div className="field">
+            <label htmlFor="fAsal">Dari ujian</label>
+            <select
+              id="fAsal"
+              className="select"
+              value={filterUjianAsal}
+              onChange={(e) => setFilterUjianAsal(e.target.value)}
+            >
+              <option value="">Semua ujian di Bank Soal</option>
+              {ujian
+                .filter((u) => String(u.id_ujian) !== String(idUjian))
+                .map((u) => (
+                  <option key={u.id_ujian} value={u.id_ujian}>
+                    {u.judul_mata_kuliah}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div className="field grow">
+            <label htmlFor="fCariBank">Cari pertanyaan</label>
+            <input
+              id="fCariBank"
+              className="input"
+              placeholder="Kata kunci soal…"
+              value={cariBank}
+              onChange={(e) => setCariBank(e.target.value)}
+            />
+          </div>
+          <label className="flex items-center gap-8 small" style={{ cursor: 'pointer', alignSelf: 'flex-end', paddingBottom: 10 }}>
+            <input
+              type="checkbox"
+              checked={hanyaBergambar}
+              onChange={(e) => setHanyaBergambar(e.target.checked)}
+            />
+            <span>Hanya yang bergambar</span>
+          </label>
+        </div>
+
+        <div className="between mb-8">
+          <span className="small muted">{bankTersaring.length} soal ditemukan di Bank Soal</span>
+          <div className="flex gap-8">
+            <button type="button" className="btn btn-sm" onClick={pilihSemuaBankTersaring} disabled={!bankTersaring.length}>
+              Pilih semua ({Math.min(bankTersaring.length, sisaSlot)})
+            </button>
+            {pilihBank.size > 0 && (
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPilihBank(new Set())}>
+                Bersihkan pilihan
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="table-wrap" style={{ maxHeight: '52vh', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: 10 }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ width: 42 }} />
+                <th>Asal Ujian</th>
+                <th>Pertanyaan</th>
+                <th style={{ width: 84 }} className="center">
+                  Gambar
+                </th>
+                <th style={{ width: 64 }} className="center">
+                  Kunci
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {memuatBank && (
+                <tr>
+                  <td colSpan={5}>
+                    <div className="empty-state">Memuat Bank Soal…</div>
+                  </td>
+                </tr>
+              )}
+              {!memuatBank && bankTersaring.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    <div className="empty-state">Tidak ada soal yang cocok dengan filter.</div>
+                  </td>
+                </tr>
+              )}
+              {!memuatBank &&
+                bankTersaring.map((s) => {
+                  const centang = pilihBank.has(s.id_soal)
+                  return (
+                    <tr
+                      key={s.id_soal}
+                      onClick={() => togglePilihSoalBank(s.id_soal)}
+                      style={{ cursor: 'pointer', background: centang ? 'var(--blue-50, #eff6ff)' : undefined }}
+                    >
+                      <td className="center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={centang}
+                          onChange={() => togglePilihSoalBank(s.id_soal)}
+                        />
+                      </td>
+                      <td className="tiny muted">{s.judul_mata_kuliah || `Ujian #${s.id_ujian}`}</td>
+                      <td className="small strong">{s.teks_soal}</td>
+                      <td className="center">
+                        {s.gambar_url ? (
+                          <img
+                            src={s.gambar_url}
+                            alt=""
+                            style={{ width: 48, height: 34, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--line)' }}
+                          />
+                        ) : (
+                          <span className="tiny muted">—</span>
+                        )}
+                      </td>
+                      <td className="center">
+                        <span className="badge badge-green">{s.kunci_jawaban}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
         </div>
       </Modal>
     </>

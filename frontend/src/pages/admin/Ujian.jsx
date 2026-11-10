@@ -13,6 +13,7 @@ const KOSONG = {
   waktu_mulai: '08:00',
   waktu_selesai: '09:00',
   status_aktif: false,
+  acak_soal: true,
 }
 
 export default function AdminUjian() {
@@ -70,6 +71,7 @@ export default function AdminUjian() {
             waktu_mulai: jam(u.waktu_mulai),
             waktu_selesai: jam(u.waktu_selesai),
             status_aktif: !!u.status_aktif,
+            acak_soal: u.acak_soal !== false,
           }
         : { ...KOSONG, tanggal: new Date().toISOString().slice(0, 10) }
     )
@@ -94,6 +96,7 @@ export default function AdminUjian() {
         waktu_selesai: form.waktu_selesai || '09:00',
         durasi_menit: d,
         status_aktif: form.status_aktif,
+        acak_soal: form.acak_soal,
       }
       if (edit) await Api.updateUjian(edit.id_ujian, payload)
       else await Api.createUjian(payload)
@@ -382,6 +385,19 @@ export default function AdminUjian() {
               />
             </div>
           </div>
+
+          <label className="flex items-center gap-8" style={{ cursor: 'pointer', marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              checked={form.acak_soal !== false}
+              onChange={(e) => setForm({ ...form, acak_soal: e.target.checked })}
+            />
+            <span className="small">
+              <b>Acak urutan soal untuk setiap peserta</b>
+              <br />
+              <span className="muted">Setiap peserta mendapatkan penempatan nomor soal yang berbeda secara otomatis.</span>
+            </span>
+          </label>
 
           <label className="flex items-center gap-8" style={{ cursor: 'pointer', marginBottom: 4 }}>
             <input

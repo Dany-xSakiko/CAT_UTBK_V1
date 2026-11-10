@@ -28,6 +28,7 @@ export default function PesertaUjian() {
   const [warn, setWarn] = useState(null)
   const [warnCount, setWarnCount] = useState(0)
   const [camMin, setCamMin] = useState(false)
+  const [zoomImg, setZoomImg] = useState(null)
   const selesaiRef = useRef(false)
 
   const soal = data?.soal || []
@@ -192,6 +193,7 @@ export default function PesertaUjian() {
           <b>{data?.ujian?.judul_mata_kuliah}</b>
           <span>
             Soal {idx + 1} dari {soal.length}
+            {data?.ujian?.acak_soal !== false ? ' · Urutan diacak' : ''}
           </span>
         </div>
         <div className="spacer" />
@@ -239,12 +241,13 @@ export default function PesertaUjian() {
               onClick={() =>
                 setFlag((prev) => {
                   const next = new Set(prev)
-                  next.has(s.nomor_urut) ? next.delete(s.nomor_urut) : next.add(s.nomor_urut)
+                  if (next.has(s.id_soal)) next.delete(s.id_soal)
+                  else next.add(s.id_soal)
                   return next
                 })
               }
               style={
-                flag.has(s.nomor_urut)
+                flag.has(s.id_soal)
                   ? { color: 'var(--amber-600)', background: 'var(--amber-100)', borderColor: '#fedf89' }
                   : undefined
               }
@@ -254,6 +257,33 @@ export default function PesertaUjian() {
           </div>
 
           <div className="q-body">
+            {s?.gambar_url && (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: 12,
+                  border: '1px solid var(--line)',
+                  borderRadius: 12,
+                  background: '#f8fafc',
+                  textAlign: 'center',
+                }}
+              >
+                <img
+                  src={s.gambar_url}
+                  alt={`Gambar soal ${idx + 1}`}
+                  onClick={() => setZoomImg(s.gambar_url)}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: 320,
+                    borderRadius: 8,
+                    cursor: 'zoom-in',
+                    objectFit: 'contain',
+                  }}
+                  title="Klik untuk memperbesar gambar"
+                />
+                <div className="tiny muted mt-8">Klik gambar untuk memperbesar</div>
+              </div>
+            )}
             <div className="q-text">{s?.teks_soal}</div>
 
             <div className="opt-list">
@@ -313,7 +343,7 @@ export default function PesertaUjian() {
               <button
                 key={q.id_soal}
                 onClick={() => setIdx(i)}
-                className={`${jawab[q.id_soal] ? 'answered' : ''} ${flag.has(q.nomor_urut) ? 'flagged' : ''} ${
+                className={`${jawab[q.id_soal] ? 'answered' : ''} ${flag.has(q.id_soal) ? 'flagged' : ''} ${
                   i === idx ? 'current' : ''
                 }`}
               >
@@ -392,6 +422,29 @@ export default function PesertaUjian() {
             <button className="btn btn-primary btn-lg" onClick={() => setWarn(null)}>
               Saya mengerti
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------- modal zoom gambar soal ---------------------------- */}
+      {zoomImg && (
+        <div className="modal-backdrop open" onMouseDown={(e) => e.target === e.currentTarget && setZoomImg(null)}>
+          <div className="modal wide" style={{ maxWidth: 820 }}>
+            <div className="modal-head">
+              <div>
+                <h3>Gambar Soal {idx + 1}</h3>
+              </div>
+              <button className="x" onClick={() => setZoomImg(null)} aria-label="Tutup">
+                ✕
+              </button>
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <img
+                src={zoomImg}
+                alt={`Gambar soal ${idx + 1}`}
+                style={{ maxWidth: '100%', maxHeight: '72vh', borderRadius: 10 }}
+              />
+            </div>
           </div>
         </div>
       )}

@@ -31,23 +31,29 @@ class RekamController extends Controller
         $selesai = ! $rekam->sedangBerjalan();
         $petaJawaban = $jawaban->keyBy('id_soal');
 
+        // Acak urutan soal secara konsisten per peserta selama ujian berlangsung
+        $soalTerurut = $rekam->urutkanSoalUntukPeserta($soal)->values();
+
         return response()->json([
             'success' => true,
             'data'    => [
                 'rekam'   => $this->formatRekam($rekam),
                 'ujian'   => $rekam->ujian,
-                'soal'    => $soal->map(fn (Soal $s) => [
-                    'id_soal'    => $s->id_soal,
-                    'nomor_urut' => $s->nomor_urut,
-                    'teks_soal'  => $s->teks_soal,
-                    'opsi'       => [
+                'soal'    => $soalTerurut->map(fn (Soal $s, int $i) => [
+                    'id_soal'         => $s->id_soal,
+                    'nomor_urut'      => $s->nomor_urut,
+                    'nomor_tampil'    => $i + 1,
+                    'teks_soal'       => $s->teks_soal,
+                    'gambar_soal'     => $s->gambar_soal,
+                    'gambar_url'      => $s->gambar_url,
+                    'opsi'            => [
                         'A' => $s->opsi_a, 'B' => $s->opsi_b, 'C' => $s->opsi_c,
                         'D' => $s->opsi_d, 'E' => $s->opsi_e,
                     ],
                     // kunci hanya dibuka setelah sesi selesai (untuk halaman hasil)
-                    'kunci_jawaban' => $selesai ? $s->kunci_jawaban : null,
+                    'kunci_jawaban'   => $selesai ? $s->kunci_jawaban : null,
                     'jawaban_peserta' => $petaJawaban->get($s->id_soal)?->jawaban_dipilih,
-                    'benar' => $selesai
+                    'benar'           => $selesai
                         ? ($petaJawaban->get($s->id_soal)?->jawaban_dipilih === $s->kunci_jawaban)
                         : null,
                 ]),

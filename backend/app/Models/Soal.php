@@ -16,6 +16,7 @@ class Soal extends Model
         'id_ujian',
         'nomor_urut',
         'teks_soal',
+        'gambar_soal',
         'opsi_a',
         'opsi_b',
         'opsi_c',
@@ -29,6 +30,19 @@ class Soal extends Model
         'nomor_urut' => 'integer',
         'kunci_jawaban' => 'string',
     ];
+
+    protected $appends = [
+        'gambar_url',
+    ];
+
+    public function getGambarUrlAttribute(): ?string
+    {
+        if (! $this->gambar_soal) {
+            return null;
+        }
+
+        return '/storage/' . ltrim($this->gambar_soal, '/');
+    }
 
     /**
      * Relasi ke Ujian (Many to One)

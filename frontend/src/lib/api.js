@@ -65,9 +65,12 @@ export const Api = {
 
   // ---------- soal ----------
   listSoal: (ujianId) => http.get('/soal', { params: { ujian_id: ujianId } }).then(d),
+  bankSoal: (params) => http.get('/soal/bank', { params }).then(d),
   createSoal: (payload) => http.post('/soal', payload).then(d),
   createSoalBatch: (payload) => http.post('/soal/batch', payload).then(d),
-  updateSoal: (id, payload) => http.put(`/soal/${id}`, payload).then(d),
+  salinSoal: (payload) => http.post('/soal/salin', payload).then(d),
+  updateSoal: (id, payload) =>
+    (payload instanceof FormData ? http.post(`/soal/${id}`, payload) : http.put(`/soal/${id}`, payload)).then(d),
   deleteSoal: (id) => http.delete(`/soal/${id}`).then(d),
 
   // ---------- pengguna ----------

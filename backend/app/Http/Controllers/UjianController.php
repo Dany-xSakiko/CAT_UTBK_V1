@@ -210,6 +210,8 @@ class UjianController extends Controller
         );
         $rekam->setRelation('ujian', $ujian);
 
+        $soal = $rekam->urutkanSoalUntukPeserta($soal);
+
         $deadline = $rekam->deadline();
         $sisaDetik = $deadline ? max(0, (int) now()->diffInSeconds($deadline, false)) : 0;
 
@@ -225,7 +227,7 @@ class UjianController extends Controller
                     'deadline'          => $deadline?->format('Y-m-d\TH:i:s'),
                 ],
                 'ujian'   => $ujian,
-                'soal'    => $soal->map(fn (Soal $s) => $this->formatSoal($s, false)),
+                'soal'    => $soal->values()->map(fn (Soal $s, int $i) => $this->formatSoal($s, false, $i + 1)),
                 'jawaban' => JawabanPeserta::where('id_rekam_jejak', $rekam->id_rekam_jejak)
                     ->get()
                     ->keyBy('id_soal')
@@ -243,17 +245,21 @@ class UjianController extends Controller
             'waktu_selesai'     => ['required', 'date_format:H:i', 'after:waktu_mulai'],
             'durasi_menit'      => ['required', 'integer', 'min:1', 'max:600'],
             'status_aktif'      => ['boolean'],
+            'acak_soal'         => ['boolean'],
         ]);
     }
 
-    private function formatSoal(Soal $s, bool $withKunci): array
+    private function formatSoal(Soal $s, bool $withKunci, ?int $nomorTampil = null): array
     {
         $row = [
-            'id_soal'    => $s->id_soal,
-            'id_ujian'   => $s->id_ujian,
-            'nomor_urut' => $s->nomor_urut,
-            'teks_soal'  => $s->teks_soal,
-            'opsi'       => [
+            'id_soal'      => $s->id_soal,
+            'id_ujian'     => $s->id_ujian,
+            'nomor_urut'   => $s->nomor_urut,
+            'nomor_tampil' => $nomorTampil ?? $s->nomor_urut,
+            'teks_soal'    => $s->teks_soal,
+            'gambar_soal'  => $s->gambar_soal,
+            'gambar_url'   => $s->gambar_url,
+            'opsi'         => [
                 'A' => $s->opsi_a,
                 'B' => $s->opsi_b,
                 'C' => $s->opsi_c,

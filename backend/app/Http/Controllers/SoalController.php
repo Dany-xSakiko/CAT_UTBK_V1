@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Soal;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -20,20 +22,7 @@ class SoalController extends Controller
         $soal = Soal::where('id_ujian', $request->integer('ujian_id'))
             ->orderBy('nomor_urut')
             ->get()
-            ->map(fn (Soal $s) => [
-                'id_soal'       => $s->id_soal,
-                'id_ujian'      => $s->id_ujian,
-                'nomor_urut'    => $s->nomor_urut,
-                'teks_soal'     => $s->teks_soal,
-                'opsi'          => [
-                    'A' => $s->opsi_a,
-                    'B' => $s->opsi_b,
-                    'C' => $s->opsi_c,
-                    'D' => $s->opsi_d,
-                    'E' => $s->opsi_e,
-                ],
-                'kunci_jawaban' => $s->kunci_jawaban,
-            ]);
+            ->map(fn (Soal $s) => $this->format($s));
 
         return response()->json([
             'success'   => true,
@@ -42,10 +31,121 @@ class SoalController extends Controller
         ]);
     }
 
-    /** POST /api/soal (admin) */
+    /**
+     * GET /api/soal/bank?exclude_ujian=1 (admin)
+     * Menampilkan seluruh butir soal (beserta gambarnya) yang ada di Bank Soal lintas ujian.
+     */
+    public function bank(Request $request)
+    {
+        $query = Soal::with('ujian:id_ujian,judul_mata_kuliah')
+            ->orderByDesc('gambar_soal')
+            ->orderBy('id_ujian')
+            ->orderBy('nomor_urut');
+
+        if ($request->filled('exclude_ujian')) {
+            $query->where('id_ujian', '!=', $request->integer('exclude_ujian'));
+        }
+        if ($request->boolean('hanya_bergambar')) {
+            $query->whereNotNull('gambar_soal')->where('gambar_soal', '!=', '');
+        }
+
+        $items = $query->get()->map(fn (Soal $s) => array_merge($this->format($s), [
+            'judul_mata_kuliah' => $s->ujian?->judul_mata_kuliah,
+        ]));
+
+        return response()->json([
+            'success' => true,
+            'data'    => $items,
+        ]);
+    }
+
+    /**
+     * POST /api/soal/salin (admin)
+     * Menyalin butir soal (termasuk file gambarnya) dari Bank Soal ke suatu ujian.
+     * Body: { id_ujian, id_soal: [1, 2, 3, ...] }
+     */
+    public function salinDariBank(Request $request)
+    {
+        $validated = $request->validate([
+            'id_ujian'   => ['required', 'integer', 'exists:ujian,id_ujian'],
+            'id_soal'    => ['required', 'array', 'min:1', 'max:' . self::MAKS_SOAL],
+            'id_soal.*'  => ['required', 'integer', 'exists:soal,id_soal'],
+        ]);
+
+        $idUjian = (int) $validated['id_ujian'];
+        $sumber = Soal::whereIn('id_soal', $validated['id_soal'])->orderBy('id_soal')->get();
+
+        $disalin = DB::transaction(function () use ($idUjian, $sumber) {
+            $terpakai = Soal::where('id_ujian', $idUjian)
+                ->lockForUpdate()
+                ->pluck('nomor_urut')
+                ->map(fn ($n) => (int) $n)
+                ->all();
+
+            $sisaSlot = self::MAKS_SOAL - count($terpakai);
+            if ($sumber->count() > $sisaSlot) {
+                throw ValidationException::withMessages([
+                    'id_soal' => [
+                        $sisaSlot <= 0
+                            ? 'Ujian tujuan sudah penuh (' . self::MAKS_SOAL . ' soal).'
+                            : "Hanya tersisa {$sisaSlot} slot soal pada ujian tujuan.",
+                    ],
+                ]);
+            }
+
+            $setTerpakai = array_fill_keys($terpakai, true);
+            $hasil = [];
+
+            foreach ($sumber as $asal) {
+                $no = null;
+                for ($k = 1; $k <= self::MAKS_SOAL; $k++) {
+                    if (! isset($setTerpakai[$k])) {
+                        $no = $k;
+                        break;
+                    }
+                }
+                $setTerpakai[$no] = true;
+
+                // Duplikasikan file gambar di storage agar independen dari soal asal
+                $gambarBaru = null;
+                if ($asal->gambar_soal && Storage::disk('public')->exists($asal->gambar_soal)) {
+                    $ext = pathinfo($asal->gambar_soal, PATHINFO_EXTENSION) ?: 'jpg';
+                    $gambarBaru = 'soal/soal_' . $idUjian . '_' . time() . '_' . uniqid() . '.' . $ext;
+                    Storage::disk('public')->copy($asal->gambar_soal, $gambarBaru);
+                }
+
+                $hasil[] = Soal::create([
+                    'id_ujian'      => $idUjian,
+                    'nomor_urut'    => $no,
+                    'teks_soal'     => $asal->teks_soal,
+                    'gambar_soal'   => $gambarBaru,
+                    'opsi_a'        => $asal->opsi_a,
+                    'opsi_b'        => $asal->opsi_b,
+                    'opsi_c'        => $asal->opsi_c,
+                    'opsi_d'        => $asal->opsi_d,
+                    'opsi_e'        => $asal->opsi_e ?? '',
+                    'kunci_jawaban' => $asal->kunci_jawaban,
+                ]);
+            }
+
+            return $hasil;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => count($disalin) . ' soal berhasil diambil dari Bank Soal.',
+            'data'    => array_map(fn (Soal $s) => $this->format($s), $disalin),
+        ], 201);
+    }
+
+    /** POST /api/soal (admin) — mendukung JSON maupun multipart/form-data (dengan gambar_soal) */
     public function store(Request $request)
     {
         $data = $this->validasi($request);
+
+        if ($request->hasFile('gambar_soal')) {
+            $data['gambar_soal'] = $this->simpanGambar($request->file('gambar_soal'), (int) $data['id_ujian']);
+        }
 
         $soal = DB::transaction(function () use ($data) {
             $jumlah = Soal::where('id_ujian', $data['id_ujian'])->lockForUpdate()->count();
@@ -65,14 +165,13 @@ class SoalController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Soal berhasil ditambahkan.',
-            'data'    => $soal,
+            'data'    => $this->format($soal),
         ], 201);
     }
 
     /**
      * POST /api/soal/batch (admin)
-     * Tambah beberapa soal sekaligus (mis. 5, 10, 20… hingga total 100 soal per ujian).
-     * Body: { id_ujian, soal: [ { teks_soal, opsi_a..e, kunci_jawaban, nomor_urut? }, ... ] }
+     * Tambah beberapa soal sekaligus (hingga total 100 soal per ujian), mendukung gambar per soal.
      */
     public function batchStore(Request $request)
     {
@@ -81,6 +180,7 @@ class SoalController extends Controller
             'soal'                   => ['required', 'array', 'min:1', 'max:' . self::MAKS_SOAL],
             'soal.*.nomor_urut'      => ['nullable', 'integer', 'min:1', 'max:' . self::MAKS_SOAL],
             'soal.*.teks_soal'       => ['required', 'string'],
+            'soal.*.gambar_soal'     => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:4096'],
             'soal.*.opsi_a'          => ['required', 'string'],
             'soal.*.opsi_b'          => ['required', 'string'],
             'soal.*.opsi_c'          => ['required', 'string'],
@@ -92,7 +192,7 @@ class SoalController extends Controller
         $idUjian = (int) $validated['id_ujian'];
         $items = $validated['soal'];
 
-        $dibuat = DB::transaction(function () use ($idUjian, $items) {
+        $dibuat = DB::transaction(function () use ($request, $idUjian, $items) {
             $terpakai = Soal::where('id_ujian', $idUjian)
                 ->lockForUpdate()
                 ->pluck('nomor_urut')
@@ -130,10 +230,14 @@ class SoalController extends Controller
                 }
                 $setTerpakai[$no] = true;
 
+                $file = $request->file("soal.{$idx}.gambar_soal");
+                $gambarPath = $file instanceof UploadedFile ? $this->simpanGambar($file, $idUjian) : null;
+
                 $hasil[] = Soal::create([
                     'id_ujian'      => $idUjian,
                     'nomor_urut'    => $no,
                     'teks_soal'     => $item['teks_soal'],
+                    'gambar_soal'   => $gambarPath,
                     'opsi_a'        => $item['opsi_a'],
                     'opsi_b'        => $item['opsi_b'],
                     'opsi_c'        => $item['opsi_c'],
@@ -149,11 +253,11 @@ class SoalController extends Controller
         return response()->json([
             'success' => true,
             'message' => count($dibuat) . ' soal berhasil ditambahkan.',
-            'data'    => $dibuat,
+            'data'    => array_map(fn (Soal $s) => $this->format($s), $dibuat),
         ], 201);
     }
 
-    /** PUT /api/soal/{id} (admin) */
+    /** PUT / POST /api/soal/{id} (admin) */
     public function update(Request $request, $id)
     {
         $soal = Soal::findOrFail($id);
@@ -163,19 +267,31 @@ class SoalController extends Controller
             unset($data['nomor_urut']);
         }
 
+        if ($request->hasFile('gambar_soal')) {
+            $this->hapusFileGambar($soal->gambar_soal);
+            $data['gambar_soal'] = $this->simpanGambar($request->file('gambar_soal'), (int) $data['id_ujian']);
+        } elseif ($request->boolean('hapus_gambar')) {
+            $this->hapusFileGambar($soal->gambar_soal);
+            $data['gambar_soal'] = null;
+        } else {
+            unset($data['gambar_soal']);
+        }
+
         $soal->update($data);
 
         return response()->json([
             'success' => true,
             'message' => 'Soal berhasil diperbarui.',
-            'data'    => $soal->fresh(),
+            'data'    => $this->format($soal->fresh()),
         ]);
     }
 
     /** DELETE /api/soal/{id} (admin) */
     public function destroy($id)
     {
-        Soal::findOrFail($id)->delete();
+        $soal = Soal::findOrFail($id);
+        $this->hapusFileGambar($soal->gambar_soal);
+        $soal->delete();
 
         return response()->json(['success' => true, 'message' => 'Soal dihapus.']);
     }
@@ -194,6 +310,7 @@ class SoalController extends Controller
             'id_ujian'      => ['required', 'integer', 'exists:ujian,id_ujian'],
             'nomor_urut'    => ['nullable', 'integer', 'min:1', 'max:' . self::MAKS_SOAL, $uniqueNo],
             'teks_soal'     => ['required', 'string'],
+            'gambar_soal'   => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:4096'],
             'opsi_a'        => ['required', 'string'],
             'opsi_b'        => ['required', 'string'],
             'opsi_c'        => ['required', 'string'],
@@ -203,12 +320,48 @@ class SoalController extends Controller
         ], [
             'nomor_urut.max'    => 'Nomor urut soal maksimal ' . self::MAKS_SOAL . '.',
             'nomor_urut.unique' => 'Nomor urut tersebut sudah dipakai pada ujian ini.',
+            'gambar_soal.image' => 'File lampiran soal harus berupa gambar (JPG, PNG, WEBP, atau GIF).',
+            'gambar_soal.max'   => 'Ukuran gambar soal maksimal 4 MB.',
         ]);
 
-        // kolom opsi_e bertipe NOT NULL di skema lama, simpan string kosong bila dikosongkan
         $data['opsi_e'] = $data['opsi_e'] ?? '';
 
         return $data;
+    }
+
+    private function simpanGambar(UploadedFile $file, int $idUjian): string
+    {
+        $ext = strtolower($file->extension() ?: 'jpg');
+        $filename = 'soal_' . $idUjian . '_' . time() . '_' . uniqid() . '.' . $ext;
+
+        return $file->storeAs('soal', $filename, 'public');
+    }
+
+    private function hapusFileGambar(?string $path): void
+    {
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+    }
+
+    private function format(Soal $s): array
+    {
+        return [
+            'id_soal'       => $s->id_soal,
+            'id_ujian'      => $s->id_ujian,
+            'nomor_urut'    => $s->nomor_urut,
+            'teks_soal'     => $s->teks_soal,
+            'gambar_soal'   => $s->gambar_soal,
+            'gambar_url'    => $s->gambar_url,
+            'opsi'          => [
+                'A' => $s->opsi_a,
+                'B' => $s->opsi_b,
+                'C' => $s->opsi_c,
+                'D' => $s->opsi_d,
+                'E' => $s->opsi_e,
+            ],
+            'kunci_jawaban' => $s->kunci_jawaban,
+        ];
     }
 
     /** Cari nomor urut terkecil yang belum terpakai (1..MAKS_SOAL). */

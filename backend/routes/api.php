@@ -38,9 +38,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // ---------- Soal ----------
         Route::get('/soal', [SoalController::class, 'index']);
+        Route::get('/soal/bank', [SoalController::class, 'bank']);
         Route::post('/soal', [SoalController::class, 'store']);
         Route::post('/soal/batch', [SoalController::class, 'batchStore']);
+        Route::post('/soal/salin', [SoalController::class, 'salinDariBank']);
         Route::put('/soal/{id}', [SoalController::class, 'update']);
+        Route::post('/soal/{id}', [SoalController::class, 'update']);
         Route::delete('/soal/{id}', [SoalController::class, 'destroy']);
 
         // ---------- Pengguna ----------

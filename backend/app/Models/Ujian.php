@@ -20,6 +20,7 @@ class Ujian extends Model
         'waktu_selesai',
         'durasi_menit',
         'status_aktif',
+        'acak_soal',
     ];
 
     protected $casts = [
@@ -27,6 +28,7 @@ class Ujian extends Model
         'waktu_mulai' => 'datetime:H:i:s',
         'waktu_selesai' => 'datetime:H:i:s',
         'status_aktif' => 'boolean',
+        'acak_soal' => 'boolean',
         'durasi_menit' => 'integer',
     ];
 

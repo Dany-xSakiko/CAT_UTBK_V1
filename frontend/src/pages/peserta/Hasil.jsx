@@ -176,7 +176,7 @@ export default function PesertaHasil() {
                 </tr>
               </thead>
               <tbody>
-                {soal.map((s) => {
+                {soal.map((s, i) => {
                   const jw = s.jawaban_peserta
                   const benar = s.benar === true
                   const pendek = String(s.teks_soal || '')
@@ -184,8 +184,23 @@ export default function PesertaHasil() {
                     .trim()
                   return (
                     <tr key={s.id_soal}>
-                      <td className="num strong">{s.nomor_urut}</td>
-                      <td className="small">{pendek.length > 96 ? `${pendek.slice(0, 96)}…` : pendek}</td>
+                      <td className="num strong">{s.nomor_tampil ?? i + 1}</td>
+                      <td className="small">
+                        {s.gambar_url && (
+                          <img
+                            src={s.gambar_url}
+                            alt=""
+                            style={{
+                              height: 32,
+                              borderRadius: 4,
+                              marginRight: 8,
+                              verticalAlign: 'middle',
+                              border: '1px solid var(--line)',
+                            }}
+                          />
+                        )}
+                        {pendek.length > 96 ? `${pendek.slice(0, 96)}…` : pendek}
+                      </td>
                       <td className="center">
                         <b>{jw || '—'}</b>
                       </td>
